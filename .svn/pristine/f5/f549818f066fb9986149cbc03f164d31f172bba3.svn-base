@@ -1,0 +1,71 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class PurchasesCheck {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->db = $ci->db;
+
+    }
+
+    function allocation_wrong(){
+        $alloc_str = "(SELECT SUM(amt) FROM supp_allocations AS alloc WHERE alloc.trans_no_to = tran.trans_no AND alloc.trans_type_to = tran.type)";
+        $this->db->where('(tran.alloc <> 0 OR tran.alloc IS NOT NULL)');
+        $this->db->select("$alloc_str AS alloc_amt",false);
+        $this->db->select('tran.*');
+        $this->db->select( "IF(tran.ov_amount >0,ov_amount,0) AS debit",false);
+        $this->db->select( "IF(tran.ov_amount <0,-ov_amount,0) AS credit",false);
+        $this->db->where('tran.type',ST_SUPPINVOICE);
+        $this->db->where("($alloc_str IS NULL AND tran.alloc > 0)");
+        $items = $this->db->get('supp_trans AS tran')->result();
+
+        $table = array(
+            'type'=>array('Type','center',10,'trans_type'),
+            'trans_no'=>array('#','center',10,'supp_invoice_link'),
+            'reference'=>'REF',
+            'supplier'=>'Supplier',
+            'tran_date'=>array('Date','center',10,'date'),
+            'debit'=>array('Debit','text-right',15,'number'),
+            'credit'=>array('Crebit','text-right',15,'number'),
+            'alloc'=>array('Allocated','text-right',15,'number'),
+        );
+
+        page('Supplier Invoice Wrong Allocations');
+        module_view('table_items',array('items'=>$items,'table'=>$table),true, true,'html');
+        end_page();
+    }
+
+    function supplier_payment_incorrect(){
+        $alloc_str = "(SELECT SUM(amt) FROM supp_allocations AS alloc WHERE alloc.trans_no_to = tran.trans_no AND alloc.trans_type_to = tran.type)";
+        $gl_trans_count = "( SELECT COUNT(gl.counter) FROM gl_trans AS gl WHERE gl.type=tran.type AND gl.type_no = tran.trans_no)";
+
+//         $this->db->where('(tran.alloc <> 0 OR tran.alloc IS NOT NULL)');
+//         $this->db->select("$alloc_str AS alloc_amt",false);
+        $this->db->select('tran.*');
+        $this->db->select( "IF(tran.amount >0,amount,0) AS debit",false);
+        $this->db->select( "IF(tran.amount <0,-amount,0) AS credit",false);
+        $this->db->where('tran.type',ST_SUPPAYMENT);
+
+        $this->db->where("$gl_trans_count < 1");
+        $this->db->select("$gl_trans_count AS gl_count",false);
+
+        $items = $this->db->get('bank_trans AS tran')->result();
+
+
+        $table = array(
+            'type'=>array('Type','center',10,'trans_type'),
+            'trans_no'=>array('#','center',10,'tran_detail_view'),
+            'reference'=>'REF',
+            'supplier'=>'Supplier',
+            'trans_date'=>array('Date','center',10,'date'),
+            'debit'=>array('Debit','text-right',15,'number'),
+            'credit'=>array('Crebit','text-right',15,'number'),
+//             'alloc'=>array('Allocated','text-right',15,'number'),
+//             'gl_count'=>'aaaa'
+        );
+
+        page('Supplier Invoice Wrong Allocations');
+        module_view('table_items',array('items'=>$items,'table'=>$table),true, true,'html');
+        end_page();
+    }
+}

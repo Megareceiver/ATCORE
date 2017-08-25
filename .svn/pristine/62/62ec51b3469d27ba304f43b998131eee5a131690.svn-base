@@ -1,0 +1,11 @@
+<?php
+function ref_get($tran_type,$tran_no){
+    $db = get_instance()->db;
+    $data = $db->where(array('id'=>$tran_no,'type'=>$tran_type))->get('refs');
+
+    if( $data->num_rows() > 0 ){
+        return $data->row()->reference;
+    }
+    return NULL;
+}
+?>

@@ -1,0 +1,54 @@
+<?php
+class Gl_Trans_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+    }
+
+    function add_gl_trans($data=null,$currency=null,$return_sql=false){
+        global $use_audit_trail;
+
+        if( !$data['account'] )
+            return false;
+
+        $data['tran_date'] = date2sql($data['tran_date']);
+
+        if( array_key_exists('rate', $data) && $data['rate'] >0 ){
+            $data['amount'] = round2($data['amount']*$data['rate'], user_price_dec());
+        } else if ($currency != null ){
+
+            $data['amount'] = to_home_currency($data['amount'], $currency, $data['tran_date']);
+        } else {
+            $data['amount'] = round2($data['amount'], user_price_dec());
+        }
+
+        if( abs($data['amount']) <= 0){
+            return 0;
+        }
+        if( array_key_exists('rate', $data) ){
+            unset($data['rate']);
+        }
+
+        if ( $data['dimension_id'] == null || $data['dimension_id'] < 0)
+            $data['dimension_id'] = 0;
+        if ( $data['dimension2_id'] == null || $data['dimension2_id'] < 0)
+            $data['dimension2_id'] = 0;
+
+        if (isset($use_audit_trail) && $use_audit_trail){
+            if ( $data['memo_'] == "" || $data['memo_'] == null)
+                $data['memo_'] = $_SESSION["wa_current_user"]->username;
+            else
+                $data['memo_'] = $_SESSION["wa_current_user"]->username . " - " . $data['memo_'];
+        }
+
+        $this->db->reset();
+        if( !$return_sql ){
+            $sql = $this->db->insert('gl_trans',$data,true );
+            db_query($sql, "The GL transaction could not be inserted");
+        } else {
+            $this->db->insert('gl_trans',$data);
+        }
+
+        return  $data['amount'];
+
+    }
+}

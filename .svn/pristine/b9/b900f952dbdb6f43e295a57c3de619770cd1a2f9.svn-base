@@ -1,0 +1,29 @@
+<?php
+if( !function_exists("get_gst_string") ){
+    function get_gst_string($id,$html=false){
+        $dim = "";
+        if ($id <= 0 && $html){
+            $dim = "&nbsp;";
+        } else {
+            $tax = get_gst($id);
+            if( is_object($tax) ){
+                $dim = $tax->no." (".$tax->rate."%)";
+            }
+        }
+        return $dim;
+    }
+}
+
+function get_gst($tax_id=0){
+    if( !isset($_SESSION["taxes"]) ){
+        $_SESSION["taxes"] = array();
+    }
+
+    if( array_key_exists($tax_id, $_SESSION["taxes"]) ){
+        $ci = get_instance();
+        $_SESSION["taxes"][$tax_id] = $ci->api_membership->get_data('taxdetail/'.$tax_id);
+    }
+
+    return $_SESSION["taxes"][$tax_id];
+
+}

@@ -1,0 +1,126 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+class PurchasesReportCredit {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+        $this->customer_trans_model = $ci->model('customer_trans',true);
+		$this->purchase_model = $ci->model('purch_order',true);
+		$this->purchase = $ci->model('purchase',true);
+		$this->sys_model = $ci->model('config',true);
+		$this->bank_model = $ci->model('bank_account',true);
+		$this->contact_model = $ci->model('crm',true);
+		$this->sale_order_model = $ci->model('sale_order',true);
+		$this->common_model = $ci->model('common',true);
+        $this->supplier_model = $ci->model('supplier',true);
+        $this->supplier_trans_model = $ci->model('supplier_trans',true);
+
+    }
+
+    function credit_print($pdf){
+
+        $from =       $pdf->inputVal('PARAM_0');
+        $to =         $pdf->inputVal('PARAM_1');
+
+        $fno = explode("-", $from);
+        $tno = explode("-", $to);
+        $from = min($fno[0], $tno[0]);
+        $to = max($fno[0], $tno[0]);
+        if (!$from || !$to) return;
+
+        $trans_where = array();
+        $currency =   $pdf->inputVal('PARAM_2');
+        $email =      $pdf->inputVal('PARAM_3');
+
+        $comments =   $pdf->inputVal('PARAM_4');
+        $orientation =$pdf->inputVal('PARAM_5') ? 'L' : 'P' ;
+
+        $start_date =	$pdf->inputVal('PARAM_6');
+        if( !is_date($start_date) ){
+            $start_date = null;
+        } else {
+            $start_date = date('Y-m-d',strtotime($start_date));
+        }
+
+        $end_date = 	$pdf->inputVal('PARAM_7');
+        if( !is_date($end_date) ){
+            $end_date = null;
+        } else {
+            $end_date = date('Y-m-d',strtotime($end_date));
+        }
+
+        $reference =    $pdf->inputVal('PARAM_8');
+
+        $limit = 1;
+
+        for ($i = $from; $i <= $to; $i++){
+
+            if ($fno[0] == $tno[0])
+                $types = array($fno[1]);
+            else
+                $types = array(ST_BANKPAYMENT, ST_SUPPAYMENT, ST_SUPPCREDIT);
+
+            foreach ($types as $j) {
+                $trans = $this->purchase->get_purchase_tran($j,$i,$start_date,$end_date,$reference);
+
+                if( !$trans || !$trans->supplier_id ){
+                    continue;
+                }
+                $pdf->items = $this->supplier_model->get_alloc_supp_sql_ci($trans->supplier_id,$trans->type,$trans->trans_no);
+
+                $pdf->items_view = array(
+                    'trans_type'=>array('title'=>'Trans Type','w'=>19,'class'=>'boleft'),
+                    'reference'=>array('title'=>'#' ,'w'=>13),
+                    'tran_date'=>array('title'=>'Date' ,'w'=>14,'class'=>'textcenter'),
+                    'due_date'=>array('title'=>'Due Date','w'=>14,'class'=>'textright'),
+                    'price'=>array('title'=>'Total Amount','w'=>18,'class'=>'textright'),
+                    'left_alloc'=>array('title'=>'Left to Allocate','w'=>22,'class'=>'textright')
+                );
+
+                $contact = $this->contact_model->get_crm_persons('supplier', 'invoice', $trans->supplier_id);
+
+                $pdf->order = array(
+                    'debtor'=>null,
+                    'debtor_no'=>$trans->debtor_no,
+                    'name'=>$trans->supp_name,
+                    'delivery'=>$trans->supp_name,
+                    'delivery_address'=>$trans->address,
+                    'date'=>date('d-m-Y',strtotime($trans->tran_date)),
+                    'contact' => (array)$contact,
+                    'order_no'=>$trans->reference,
+                    'reference'=>$trans->reference,
+                    'tax_included'=>'tax_included',
+                    'payment_terms'=>$trans->terms,
+                    'shipping'=>'shipping',
+                    'trans_no'=>'trans_no',
+                    'curr_code'=>$trans->curr_code ,
+                    'total_words'=>price_in_words($trans->Total, ST_CUSTPAYMENT),
+                    'total'=> abs($trans->alloc),
+                    'left_alloc'=>abs($trans->Total)-abs($trans->alloc),
+
+                );
+                if( $pdf->order['left_alloc'] < 0.009 ){
+                    $pdf->order['left_alloc'] = 0;
+                }
+
+                $pdf->order_html = $this->ci->view('reporting/order',$pdf->order,true);
+
+                $aux_info = array (
+                    _( "Customer's Reference" ) => array('w'=>16.66,'val'=>$trans->reference),
+                    _( "Type" ) 				=> array('w'=>16.66,'val'=> transaction_type_tostring($trans->type) ),
+                    _('Your GST no.')			=> array('w'=>16.66,'val'=>$trans->gst_no),
+                    _( "Supplier's Reference" ) 		=> array('w'=>16.66,'val'=>$trans->supp_reference),
+                    _( "Due Date" ) 			=> array('w'=>16.66,'val'=> sql2date($trans->due_date) ),
+                    _('Cheque No')			=> array('w'=>16.66,'val'=>$trans->cheque),
+                );
+
+                $pdf->author_html = $this->ci->view('reporting/aux_info',array('items'=>$aux_info),true);
+                $pdf->make_report();
+            }
+
+
+        }
+
+    }
+
+}

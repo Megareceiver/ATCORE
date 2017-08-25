@@ -1,0 +1,123 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+include_once(ROOT . "/reporting/includes/pdf_report.inc");
+
+class SalesReportOrder  extends ci {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+//         $this->report = $ci->module_control_load('report',null,true);
+        $this->customer_trans_model = $this->model('customer_trans',true);
+		$this->sys_model = $this->model('config',true);
+		$this->bank_model = $this->model('bank_account',true);
+		$this->contact_model = $this->model('crm',true);
+		$this->sale_order_model = $this->model('sale_order',true);
+		$this->common_model = $this->model('common',true);
+
+    }
+
+    function order_print($pdf){
+
+        $order_where = array();
+        $from = 		$pdf->inputVal('PARAM_0');
+        $to = 			$pdf->inputVal('PARAM_1');
+
+        if (!$from || !$to) return;
+
+        $max_id = max($from,$to);
+        $min_id = min($from,$to);
+        $from = $min_id;
+        $to = $max_id;
+
+        $currency =		$pdf->inputVal('PARAM_2');
+        $email = 		$pdf->inputVal('PARAM_3');
+        //$email = 'legiang0212@gmail.com';
+        $print_as_quote = $pdf->inputVal('PARAM_4');
+        $comments = $pdf->inputVal('PARAM_5');
+        $orientation = $pdf->inputVal('PARAM_6') ? 'L' : 'P';
+
+        $start_date = $pdf->inputVal('PARAM_7');
+        if( $start_date ){
+            $order_where['sorder.ord_date >='] = date('Y-m-d',strtotime($start_date));
+        }
+
+        $end_date = 	$pdf->inputVal('PARAM_8');
+        if( $end_date ){
+            $order_where['sorder.ord_date <='] = date('Y-m-d',strtotime($end_date));
+        }
+
+        $reference = $pdf->inputVal('PARAM_9');
+        if( $reference ){
+            $order_where['sorder.reference'] = $reference;
+
+        }
+        $limit = 1;
+        for ($i = $from; $i <= $to; $i++) {
+            //if($limit > 5) break;
+            $order = $this->sale_order_model->get_order($i, ST_SALESORDER,$order_where);
+            if( !$order || empty($order) ){
+                continue;
+            }
+            $pdf->items = $this->sale_order_model->get_order_details($i,ST_SALESORDER,false);
+            if( !$pdf->items || empty($pdf->items) ){
+                continue;
+            }
+            // bug($pdf->items);die;
+            $this->bankacc = $this->bank_model->get_default_account($order->curr_code);
+
+            $pdf->items_view = array(
+                'stk_code'=>array('title'=>'Item Code','w'=>15,'class'=>'boleft'),
+                'description'=>array('title'=>'Item Description' ,'w'=>38),
+                'qty'=>array('title'=>'Quantity' ,'w'=>10,'class'=>'textcenter'),
+                'units'=>array('title'=>'Units','w'=>10,'class'=>'textright'),
+                'price'=>array('title'=>'Unit Price','w'=>15,'class'=>'textright'),
+                'discount_percent'=>array('title'=>'Discount%','w'=>12,'class'=>'textright'),
+            );
+
+            $pdf->content_view = 'content-invoice';
+
+            $contact = $this->contact_model->get_branch_contacts($order->branch_code,'order',$order->debtor_no,true);
+            //  bug($contact);die;
+            $pdf->order = array(
+                'debtor'=>null,
+                'debtor_no'=>$order->debtor_no,
+                'name'=>$order->deliver_to,
+                'delivery'=>$order->deliver_to,
+                'delivery_address'=>$this->ci->form->print_address(array('addr'=>$order->delivery_address)),
+                'date'=>date('d-m-Y',strtotime($order->ord_date)),
+                'contact' => (array)$contact,
+                'order_no'=>$order->reference,
+                'reference'=>$order->reference,
+                'tax_included'=>$order->tax_included,
+                'payment_terms'=>$order->terms_name,
+                'shipping'=>$order->freight_cost,
+                'trans_no'=>order_no,
+
+            );
+
+            $pdf->order_html = $this->ci->view('reporting/order',$pdf->order,true);
+
+            $deliveries = get_sales_parent_numbers ( ST_SALESINVOICE, $order->order_no );
+
+            foreach ( $deliveries as $n => $delivery ) {
+                $deliveries [$n] = get_reference ( ST_CUSTDELIVERY, $delivery );
+            }
+
+
+            $aux_info = array (
+                _ ( "Customer's Reference" ) => array('w'=>20,'val'=>$order->customer_ref),
+                _ ( "Sales Person" ) =>     array('w'=>20,'val'=>$this->contact_model->get_salesman($order->salesman,'salesman_name')),
+                _('Your GST no.')=>         array('w'=>20,'val'=>$order->tax_id),
+                _ ( "Our Order No." ) =>    array('w'=>20,'val'=>$order->order_no),
+                _ ( "Delivery Date" ) =>    array('w'=>20,'val'=> $order->delivery_date ? sql2date( $order->delivery_date ) : null ),
+            );
+            $pdf->author_html = $this->ci->view('reporting/aux_info',array('items'=>$aux_info),true);
+
+            $pdf->make_report();
+            $limit++;
+        }
+        // 		die('iam heer');
+
+    }
+}

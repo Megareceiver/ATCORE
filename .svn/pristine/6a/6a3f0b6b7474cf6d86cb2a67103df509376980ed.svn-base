@@ -1,0 +1,31 @@
+<?php
+class Opening_Trans_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+    }
+
+    function balance_total($type=0,$detor_no=0){
+
+        $this->db->select("SUM(debit-credit) AS amount",false);
+
+        if( $type != null ){
+            $this->db->where('type',$type);
+        }
+        if( $detor_no != null ){
+            $this->db->where('customer',$detor_no);
+        }
+        $result = $this->db->get('opening_sale');
+//         bug( $this->db->last_query() );
+        if( is_object($result) ){
+            if( $type ){
+                $data = $result->row();
+                return $data->amount;
+            }
+            return $result->result();
+        }
+
+
+    }
+
+
+}

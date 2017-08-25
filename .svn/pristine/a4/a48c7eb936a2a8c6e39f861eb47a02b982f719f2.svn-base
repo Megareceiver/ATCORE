@@ -1,0 +1,34 @@
+<?php
+function load_module_model($model=null,$return=false,$module=null){
+    $ci = &get_instance();
+    if( !$module ) {
+        $module = $ci->uri->segment(1);
+    }
+
+    if( !$model ){
+        $model = $module;
+    }
+
+    $name = ucfirst($module).'_'.ucfirst($model).'_Model';
+    $model = strtolower($model);
+
+    $model_file = MODULEPATH.DS."$module/models/".$model."_model.php";
+
+    if ( file_exists($model_file)) {
+
+        if( !class_exists($name) ){
+            require($model_file);
+        }
+
+        if( $return ){
+            $return = new $name();
+
+
+
+            return $return;
+        } else {
+            self::$name = new $name();
+        }
+
+    }
+}

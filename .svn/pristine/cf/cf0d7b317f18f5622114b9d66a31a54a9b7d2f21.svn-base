@@ -1,0 +1,80 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class BankIssuesFix {
+    function __construct() {
+        $ci = get_instance();
+
+        $this->db = $ci->db;
+        $this->gl_trans_model = module_model_load('trans','gl');
+        $this->bank_trans_model = module_model_load('trans','bank');
+    }
+
+    /*
+     * 20161018
+     * QuanNH add
+     */
+    private function check_bankpayment_lost_header(){
+        return ;
+        $this->db->select('gl.*')->from('gl_trans AS gl');
+
+        $this->db->where('ABS(gl.amount) > 0');
+        $this->db->left_join('bank_trans AS b','b.type=gl.type AND b.trans_no=gl.type_no');
+        $this->db->select('b.trans_no');
+        $this->db->where('b.trans_no IS NULL');
+
+        $this->db->where('gl.account',1065);
+        $this->db->where('gl.type',ST_BANKDEPOSIT);
+
+        $result = $this->db->get();
+
+
+        if( $result->num_rows() > 0 ) foreach ($result->result() AS $tran){
+
+            $tran_reinsert = array(
+                'type'=>$tran->type,
+                'trans_no'=>$tran->type_no,
+                'tax_inclusive'=>0,
+                'ref'=>ref_get($tran->type,$tran->type_no),
+                'trans_date'=>$tran->tran_date,
+                'dimension_id'=>$tran->dimension_id,
+                'dimension2_id'=>$tran->dimension2_id,
+
+                'person_type_id'=>$tran->person_type_id,
+                'person_id'=>$tran->person_id,
+                'amount' =>$tran->amount,
+                'bank_act'=>2
+
+            );
+
+            $this->db->insert('bank_trans',$tran_reinsert);
+        }
+
+    }
+
+    /*
+     * 20161018
+     * QuanNH add
+     */
+    function check_bank_duplicate(){
+        $this->db->select('type, trans_no, COUNT(id) AS duplicate');
+        $this->db->where('amount <> 0');
+        $this->db->where_in('type',array(ST_BANKDEPOSIT,ST_BANKPAYMENT));
+        $this->db->having("COUNT(*) > 1",false);
+        $this->db->group_by('type, trans_no');
+        $result = $this->db->get('bank_trans');
+
+        if( is_object($result) && $result->num_rows() > 0 ){
+            foreach ($result->result() AS $tran){
+                $gl_trans = $this->gl_trans_model->get_gl_trans($tran->type,$tran->trans_no);
+                if( count($gl_trans) > 3){
+                    bug($gl_trans);
+                    die;
+                } else {
+                    $bank_trans = $this->bank_trans_model->get_bank_trans($tran->type,$tran->trans_no);
+                }
+
+            }
+
+        }
+    }
+}

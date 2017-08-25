@@ -1,0 +1,23 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+class UserSession {
+    function __construct() {
+
+
+//         $this->page = $ci->page;
+        $this->page_security = 'SA_TAXREP';
+//         $this->model = $this->ci->module_model( NULL ,'report',true);
+
+
+    }
+    function index(){
+        show_404();
+    }
+
+    function login(){
+        global $assets_path;
+        page_add_css("login.css");
+//         page_add_css("$assets_path/css/login.css");
+        module_view('login',NULl,true,'login','user');
+//         module_view('login',$data=array(),$display = true, $use_theme=true,$module=NULL );
+    }
+}

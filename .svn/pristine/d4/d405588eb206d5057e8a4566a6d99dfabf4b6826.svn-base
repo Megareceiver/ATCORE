@@ -1,0 +1,131 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class SalesReportPayment  extends ci {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+//         $this->report = $ci->module_control_load('report',null,true);
+        $this->customer_trans_model = $this->model('customer_trans',true);
+		$this->sys_model = $this->model('config',true);
+		$this->bank_model = $this->model('bank_account',true);
+		$this->contact_model = $this->model('crm',true);
+		$this->sale_order_model = $this->model('sale_order',true);
+		$this->common_model = $this->model('common',true);
+
+    }
+
+    function  customer_payment($pdf){
+
+
+        $from =         input_val('PARAM_0');
+        $to =           input_val('PARAM_1');
+        $currency =     input_val('PARAM_2');
+        $comments =     input_val('PARAM_3');
+        $orientation =  input_val('PARAM_4');
+
+        $start_date =   input_val('PARAM_5');
+        if( !is_date($start_date) ){
+            $start_date = null;
+        } else {
+            $start_date = date('Y-m-d',strtotime($start_date));
+        }
+
+        $end_date = input_val('PARAM_6');
+        if( !is_date($end_date) ){
+            $end_date = null;
+        } else {
+            $end_date = date('Y-m-d',strtotime($end_date));
+        }
+
+        $reference = input_val('PARAM_7');
+
+        if (!$from || !$to)
+            return;
+        $orientation = ($orientation ? 'L' : 'P');
+        $dec = user_price_dec();
+
+        $fno = explode("-", $from);
+        $tno = explode("-", $to);
+        $from = min($fno[0], $tno[0]);
+        $to = max($fno[0], $tno[0]);
+        $export = true;
+        for ($i = $from; $i <= $to; $i++) {
+            if ($fno[0] == $tno[0])
+                $types = array($fno[1]);
+            else
+                $types = array(ST_BANKDEPOSIT, ST_CUSTPAYMENT);
+
+            foreach ($types as $j) {
+                $order = $this->sale_order_model->get_receipt_CP($j, $i,$start_date,$end_date,$reference);
+
+
+
+                if ( empty($order)){
+                    $export = false;
+                    continue;
+                }
+
+
+                $contact = $this->contact_model->get_branch_contacts($order->branch_code,'order',$order->debtor_no,true);
+
+                $total_allocated = 0;
+
+                $pdf->order = array(
+                    'curr_code'=>$order->curr_code,
+                    'debtor'=>null,
+                    'debtor_no'=>$order->debtor_no,
+                    'name'=>$order->DebtorName,
+                    'delivery'=>$order->DebtorName,
+                    'delivery_address'=>$order->address,
+                    'date'=>date('d-m-Y',strtotime($order->tran_date)),
+                    'contact' => (array)$contact,
+                    'order_no'=>$order->reference,
+                    'reference'=>$order->reference,
+                    'tax_included'=>'tax_included',
+                    'payment_terms'=>$order->terms_name,
+                    'shipping'=>'freight_cost',
+                    'trans_no'=>'order_no',
+                    'curr_code'=>$order->curr_code ,
+                    'total_words'=>price_in_words(0, ST_CUSTPAYMENT),
+                    'total_allocated'=> $order->alloc,
+                    'left_alloc'=>0,
+                    'discount'=>$order->ov_discount,
+                    'total_receipt'=>$order->alloc-$order->ov_discount,
+
+                );
+
+                $pdf->order_html = $this->ci->view('reporting/order',$pdf->order,true);
+
+                $aux_info = array (
+                    _ ( "Customer's Reference" ) =>     array('w'=>16.66,'val'=>$order->debtor_ref),
+                    _ ( "Type " )         =>     array('w'=>16.66,'val'=>'Customer Payment'),
+                    _('Your GST no.')            =>     array('w'=>16.66,'val'=>$order->gst_no),
+                    _ ( "Our Order No." )        =>     array('w'=>16.66,'val'=>$order->trans_no),
+                    _ ( "Due Date" )        =>     array('w'=>16.66,'val'=> $order->tran_date ? $this->ci->form->date_format(array('time'=>$order->tran_date)) : null ),
+                    _ ( "Cheque No" )        =>     array('w'=>16.66,'val'=> $order->cheque ),
+                );
+
+                $pdf->author_html = $this->ci->view('reporting/aux_info',array('items'=>$aux_info),true);
+                $pdf->items = $this->sale_order_model->get_allocations_for_receipt($order->debtor_no,$order->type,$order->trans_no);
+
+                $pdf->items_view = array(
+                    'trans_type'=>array('title'=>'Trans Type','w'=>15,'class'=>'boleft'),
+                    'reference'=>array('title'=>'#' ,'w'=>15),
+                    'tran_date'=>array('title'=>'Date' ,'w'=>15,'class'=>'textcenter'),
+                    'due_date'=>array('title'=>'Due Date','w'=>15,'class'=>'textright'),
+                    'price'=>array('title'=>'Total Amount','w'=>18,'class'=>'textright'),
+                    'left_alloc'=>array('title'=>'Left to Allocate','w'=>22,'class'=>'textright')
+                );
+            }
+            if($export ){
+                $pdf->make_report();
+            } else {
+                $export = true;
+            }
+
+        } // end loop payment id
+    }
+
+
+}

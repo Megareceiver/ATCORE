@@ -1,0 +1,114 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+class Admin_Fiscalyear_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+        $this->gl_trans_model = module_model_load('trans','gl',true);
+
+    }
+
+    function items(){
+        $this->db->select("IF(closed = 1, 'Yes', 'No' ) AS closed_text",false);
+        $result = $this->db->select('fiscal_year.*')->order_by('begin')->get('fiscal_year');
+        if( $result->num_rows > 0 ){
+            return $result->result();
+        } else {
+            return array();
+        }
+    }
+
+    function check_years_before($date, $closed=false){
+        if (!$closed)
+            $this->db->where('closed',0);
+        $result = $this->db->where('begin <',date2sql($date))->get('fiscal_year');
+        if( $result->num_rows > 0 ){
+            return ( count($result->result()) > 0);
+        } else {
+            display_error( _("could not check fiscal years before"));
+        }
+        return false;
+    }
+
+
+    function get_fiscalyear($id=0) {
+        if( !$id ) {
+            display_error( _("could not get fiscal year without ID"));
+            return false;
+        }
+
+        $result = $this->db->where('id',$id)->get('fiscal_year');
+
+        if( $result->num_rows > 0 ){
+            return $result->row();
+        } else {
+            display_error( _("could not get fiscal year"));
+        }
+    }
+
+    function close_year($year) {
+	   $co = get_company_prefs();
+	   if (get_gl_account($co['retained_earnings_act']) == false || get_gl_account($co['profit_loss_year_act']) == false){
+	       display_error(_("The Retained Earnings Account or the Profit and Loss Year Account has not been set in System and General GL Setup"));
+	       return false;
+	   }
+
+	   if (!is_account_balancesheet($co['retained_earnings_act']) || is_account_balancesheet($co['profit_loss_year_act'])) {
+	       display_error(_("The Retained Earnings Account should be a Balance Account or the Profit and Loss Year Account should be an Expense Account (preferred the last one in the Expense Class)"));
+	       return false;
+        }
+
+        begin_transaction();
+
+        $myrow = $this->get_fiscalyear($year);
+        if( !$myrow || !isset($myrow->end ) ){
+            die('no date');
+        }
+        $to = $myrow->end;
+
+        //retrieve total balances from balance sheet accounts
+        $this->db->select('SUM(amount) AS sum',false)->from('gl_trans AS gl');
+        $this->db->join('chart_master AS acc','acc.account_code = gl.account','inner');
+        $this->db->join('chart_types AS acc_type','acc_type.id = acc.account_type','inner');
+
+        $this->db->join('chart_class AS acc_class','acc_class.cid = acc_type.class_id','inner');
+        $this->db->where(array('acc_class.ctype >='=>CL_ASSETS,'acc_class.ctype <='=>CL_EQUITY));
+
+        $result = $this->db->where('gl.tran_date <=',$to)->get();
+
+        $balance = 0;
+        if( $result->num_rows > 0 ){
+            $data = $result->row();
+            $balance = floatval($data->sum);
+        } else {
+            display_error( _("The total balance could not be calculated"));
+            return;
+        }
+
+        if( $balance != 0 ){
+            $trans_type = ST_JOURNAL;
+    		$trans_id = get_next_trans_no($trans_type);
+    		bug("next trans_id=$trans_id");
+    		bug($this->gl_trans_model);die('quannh');
+        }
+
+        bug( $this->db->last_query() );
+        bug($data);die('quannh');
+
+// 	$to = sql2date($to);
+
+// 	if ($balance != 0.0)
+// 	{
+// 		$trans_type = ST_JOURNAL;
+// 		$trans_id = get_next_trans_no($trans_type);
+
+// 		add_gl_trans($trans_type, $trans_id, $to, $co['retained_earnings_act'],
+// 			0, 0, _("Closing Year"), -$balance);
+// 		add_gl_trans($trans_type, $trans_id, $to, $co['profit_loss_year_act'],
+// 			0, 0, _("Closing Year"), $balance);
+
+// 	}
+// 	close_transactions($to);
+
+// 	commit_transaction();
+// 	return true;
+}
+}

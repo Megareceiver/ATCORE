@@ -1,0 +1,11 @@
+<?php
+class Void_Tran_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+    }
+
+    function not_voided($type, $type_no){
+        $this->db->where("$type_no NOT IN ( SELECT voided.id FROM voided AS voided WHERE voided.type=$type )");
+
+    }
+}

@@ -1,0 +1,83 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+class PurchasesReportInvoice {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+        $this->customer_trans_model = $ci->model('customer_trans',true);
+		$this->purchase_model = $ci->model('purch_order',true);
+		$this->purchase = $ci->model('purchase',true);
+		$this->sys_model = $ci->model('config',true);
+		$this->bank_model = $ci->model('bank_account',true);
+		$this->contact_model = $ci->model('crm',true);
+		$this->sale_order_model = $ci->model('sale_order',true);
+		$this->common_model = $ci->model('common',true);
+        $this->supplier_model = $ci->model('supplier',true);
+        $this->supplier_trans_model = $ci->model('supplier_trans',true);
+
+    }
+
+    function invoice_print(){
+        $tran_id = 		input_val('trans_no');
+
+        $invoice = $this->supplier_model->get_invoice($tran_id,ST_SUPPINVOICE);
+
+        if( $invoice ){
+            $this->ci->reporting->order = array(
+                'date'=>sql2date($invoice->tran_date),
+                'purchase_invoice'=>$invoice->reference,
+                'reference'=>$invoice->reference,
+                'tax_included'=>$invoice->tax_included,
+                'payment_terms'=>$invoice->payment_terms_name,
+                'invoice_no'=>$invoice->trans_no
+            );
+            if( $invoice->self_bill ){
+                $this->ci->reporting->title = 'Self-Bill Invoice';
+                $aux_info = array (
+                    _ ( "Supplier Reference" ) => array('w'=>20,'val'=>$invoice->supp_reference),
+                    _ ( "Sales Person" ) => 		array('w'=>20,'val'=>null),
+                    _('Your GST no.')=>				array('w'=>20,'val'=>$invoice->tax_id),
+                    _ ( "Invoice Date" ) => 			array('w'=>20,'val'=> $this->ci->reporting->order['date']),
+                    'Self Bill Approval Ref'=>array('w'=>20,'val'=> $invoice->self_bill_approval_ref),
+                );
+            } else {
+                $aux_info = array (
+                    _ ( "Supplier Reference" ) => array('w'=>25,'val'=>$invoice->supp_reference),
+                    _ ( "Sales Person" ) => 		array('w'=>25,'val'=>null),
+                    _('Your GST no.')=>				array('w'=>25,'val'=>$invoice->tax_id),
+                    _ ( "Invoice Date" ) => 			array('w'=>25,'val'=> $this->ci->reporting->order['date']),
+                );
+
+            }
+            $order_info= array(
+                'contact'=>(array)$contacts[0],
+                'company'=>$this->ci->reporting->company,
+                'name'=>$this->ci->reporting->company['name'],
+                'address'=>$this->ci->reporting->company['address'],
+                'delivery'=>$invoice->supp_name
+            );
+
+            $this->ci->reporting->order_html = $this->ci->view('reporting/order/invoice',$order_info,true);
+
+
+            $this->ci->reporting->author_html = $this->ci->view('export/aux_info',array('items'=>$aux_info),true);
+
+            $this->ci->reporting->items_view = array(
+                'stock_id'=>array('title'=>'Item code' ,'w'=>15,'class'=>'textcenter','ite_class'=>'default'),
+                'description'=>array('title'=>'Item Description','w'=>45),
+                'quantity'=>array('title'=>'Quantity','w'=>10,'class'=>'textcenter'),
+                'unit_price'=>array('title'=>'Unit','w'=>15,'class'=>'textcenter'),
+                'price'=>array('title'=>'Price','w'=>15,'class'=>'textright'),
+            );
+            // bug($invoice->items);die;
+            $this->ci->reporting->items = $invoice->items;
+            return true;
+            //             $this->reporting->make_report();
+        }
+
+
+    }
+
+
+
+}

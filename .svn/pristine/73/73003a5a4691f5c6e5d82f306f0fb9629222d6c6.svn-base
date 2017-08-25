@@ -1,0 +1,64 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+// import_bank_lost_detail
+class MaintenanceImportBankLostDetail {
+    function __construct() {
+
+    }
+
+    function index(){
+        $this->bank_deposit("4020 Bank Deposit 2015.xls");
+    }
+
+    private function bank_deposit($file=NULL){
+
+        $file_dir = realpath(ROOT."/company/import/")."/";
+
+        if( !$file OR !file_exists($file = $file_dir.$file))
+            return false;
+        $foundInCells = array();
+
+        $excel = get_instance()->load_library('phpexcel',true);
+        $objectReader = PHPExcel_IOFactory::createReader('Excel5');
+        $objectReader->setReadDataOnly(true);
+
+        $objPHPExcel = $objectReader->load($file);
+
+
+        $objWorksheet = $objPHPExcel->getActiveSheet();
+        $row_index = $objWorksheet->getHighestRow();
+
+        $tran_import = array();
+        for($row =2; $row <= $row_index; $row++){
+            $gl_acc = $objWorksheet->getCell("A$row")->getValue();
+            $tran_no = $objWorksheet->getCell("B$row")->getValue();
+
+            $ref = $objWorksheet->getCell("C$row")->getValue();
+
+
+
+            $tran_no = intval($tran_no);
+
+
+            if( $tran_no==78 ){
+                $tran_import[] = array(
+                    'trans_no'=>$tran_no,
+                    'account_code'=>$gl_acc,
+
+                    'amount'=>floatval($objWorksheet->getCell("E$row")->getValue())
+
+                );
+            }
+        }
+
+        $sum_amount = 0;
+        foreach ($tran_import AS $tran){
+            $sum_amount += $tran['amount'];
+        }
+        bug($tran_import);
+        bug($sum_amount);
+
+
+        bug($file_dir);die('aaa');
+    }
+
+}

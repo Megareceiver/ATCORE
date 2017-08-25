@@ -1,0 +1,67 @@
+
+
+.text-center {
+    text-align: center;
+}
+
+.table {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 20px;
+}
+.table > thead > tr > th,
+.table > tbody > tr > th,
+.table > tfoot > tr > th,
+.table > thead > tr > td,
+.table > tbody > tr > td,
+.table > tfoot > tr > td,
+table.subtable > tbody > tr > td {
+	padding: 8px;
+	line-height: 20px;
+	vertical-align: top;
+	border-top: 1px solid #ddd;
+	text-align: left;
+}
+
+table.borderrignt_none {
+	border-right: none;
+
+}
+
+
+
+.table-striped > tbody > tr:nth-of-type(odd) {
+	background-color: #f9f9f9;
+}
+
+.table tr > .center,
+.subtable tr > .center {
+	text-align: center;
+	vertical-align: middle;
+}
+.table tr > .right,
+.subtable tr > .right {
+	text-align: right;
+	vertical-align: middle;
+}
+.table tr > .paddingnone,
+.subtable tr > .paddingnone {
+	padding: 0;
+}
+
+table.subtable {
+	border: none;
+}
+table.subtable > tbody > tr:FIRST-CHILD > td {
+	border-top: none;
+}
+
+
+
+.form-group label {
+	font-weight: normal;
+}
+.form-group .form-control,
+.form-group label {
+	font-size: 12px;
+}

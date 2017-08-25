@@ -1,0 +1,217 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+class PurchasesReportPayment {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+        $this->customer_trans_model = $ci->model('customer_trans',true);
+		$this->purchase_model = $ci->model('purch_order',true);
+		$this->purchase = $ci->model('purchase',true);
+		$this->sys_model = $ci->model('config',true);
+		$this->bank_model = $ci->model('bank_account',true);
+		$this->contact_model = $ci->model('crm',true);
+		$this->sale_order_model = $ci->model('sale_order',true);
+		$this->common_model = $ci->model('common',true);
+        $this->supplier_model = $ci->model('supplier',true);
+        $this->supplier_trans_model = $ci->model('supplier_trans',true);
+        $this->report = module_control_load('report','report');
+
+    }
+
+    function payment_print(){
+
+        $from =       input_val('PARAM_0');
+        $to =         input_val('PARAM_1');
+
+        $fno = explode("-", $from);
+        $tno = explode("-", $to);
+        $from = min($fno[0], $tno[0]);
+        $to = max($fno[0], $tno[0]);
+        if (!$from || !$to) return;
+
+        $trans_where = array();
+        $currency =   input_val('PARAM_2');
+        $email =      input_val('PARAM_3');
+
+        $comments =   input_val('PARAM_4');
+        $orientation =input_val('PARAM_5') ? 'L' : 'P' ;
+
+        $start_date =	input_val('PARAM_6');
+        if( !is_date($start_date) ){
+            $start_date = null;
+        } else {
+            $start_date = date('Y-m-d',strtotime($start_date));
+        }
+
+        $end_date = 	input_val('PARAM_7');
+        if( !is_date($end_date) ){
+            $end_date = null;
+        } else {
+            $end_date = date('Y-m-d',strtotime($end_date));
+        }
+
+        $reference =    input_val('PARAM_8');
+
+        $limit = 1;
+
+        $this->rep = $this->report->front_report(_('REMITTANCE'),$this->payment_report_table);
+        $this->rep->SetHeaderType('TemplateInvoicePayment');
+
+        for ($i = $from; $i <= $to; $i++){
+
+            if ($fno[0] == $tno[0])
+                $types = array($fno[1]);
+            else
+                $types = array(ST_BANKPAYMENT, ST_SUPPAYMENT, ST_SUPPCREDIT);
+
+            foreach ($types as $j) {
+                $trans = $this->purchase->get_purchase_tran($j,$i,$start_date,$end_date,$reference);
+
+                if( !$trans || !$trans->supplier_id ){
+                    continue;
+                }
+                $this->pdf_print($trans);
+            }
+        }
+
+        $this->rep->End();
+
+    }
+
+    var $payment_report_table = array(
+        'space1'=>array(' ',2),
+        'trans_type'=>array('Tran Type',80),
+        'reference'=>array('#' ,160),
+        'tran_date'=>array('Date' ,220,'center'),
+        'due_date'=>array('Due Date',270,'center'),
+        'price'=>array('Total Amount',350,'right'),
+        'left_alloc'=>array('Left to Allocate',450,'right'),
+        'total'=>array('Total',515,'right'),
+
+    );
+
+    private function pdf_print($tran=NULL){
+
+
+// bug($tran);die;
+        $this->rep->params = array(
+            'comments' => input_val('PARAM_5'),
+            'bankaccount'=>0,
+            'tran_date'=>sql2date($tran->tran_date),
+            'reference'=>$tran->reference,
+            'payment_terms'=>$tran->terms,
+            'delivery_info'=>array(
+                'Order To'=>"",
+                'Deliver To'=>''
+            ),
+            'contact'=>NULL,
+            'aux_info' => array (
+                "Cus Ref"          =>  $tran->reference,
+                _ ( "Type" )            =>  transaction_type_tostring($tran->type),
+                _('Your GST no.')               =>  $tran->gst_no,
+                _ ( "Our Invoice No." )         =>  $tran->trans_no,
+                _ ( "Due Date" )                =>  $tran->tran_date ? sql2date($tran->tran_date) : null,
+                "Cheque No"=>$tran->cheque
+            )
+        );
+        $items = $this->supplier_model->get_alloc_supp_sql_ci($tran->supplier_id,$tran->type,$tran->trans_no);
+
+        if( !empty($items) ){
+            $this->rep->NewPage();
+            $this->rep->TextCol(1, 7,	"As advance / full / part / payment towards:", -2);
+            $this->rep->NewLine();
+
+            $Total = $discountTotal = $left_alloc = 0;
+            foreach ($items AS $detail){
+                $Total += $detail->price;
+                $left_alloc += $detail->left_alloc;
+                $this->rep->TextCol(1, 2,	tran_name($detail->trans_type), -2);
+                $this->rep->TextCol(2, 3, $detail->reference, 0);
+                $this->rep->TextCol(3, 4,	sql2date($detail->tran_date));
+                $this->rep->TextCol(4, 5,	sql2date($detail->due_date), -2);
+                $this->rep->TextCol(5, 6,	number_total($detail->price), -2);
+                $this->rep->TextCol(6, 7,	number_total($detail->left_alloc), -2);
+                $this->rep->TextCol(7, 8,	number_total($detail->price-$detail->left_alloc));
+                $this->rep->NewLine();
+
+            }
+
+
+            $this->rep->row = $this->rep->bottomMargin + 8.5 * $this->rep->lineHeight;
+            $this->rep->aligns[3] = 'right';
+
+            $this->rep->TextCol(1, 5,	$this->rep->company['curr_default'].":".price_in_words( $Total ,ST_CUSTPAYMENT));
+
+            $this->rep->TextCol(5, 7,	_('TOTAL REMITTANCE'));
+            $this->rep->TextCol(7, 8,	number_total($Total));
+
+            if( abs($discountTotal) !=0 ){
+                $this->rep->NewLine(-1);
+                $this->rep->TextCol(3, 7,	_('Total Discount'));
+                $this->rep->TextCol(7, 8,	number_total($discountTotal));
+            }
+
+
+            $this->rep->NewLine(-1);
+            $this->rep->TextCol(3, 7,	_('Left to Allocate'));
+            $this->rep->TextCol(7, 8,	number_total($left_alloc));
+
+            $this->rep->NewLine(-1);
+            $this->rep->TextCol(3, 7,	_('Total Allocated'));
+            $this->rep->TextCol(7, 8,	number_total($Total-$left_alloc));
+        }
+
+
+
+
+//         $pdf->items_view = array(
+//             'trans_type'=>array('title'=>'Trans Type','w'=>19,'class'=>'boleft'),
+//             'reference'=>array('title'=>'#' ,'w'=>13),
+//             'tran_date'=>array('title'=>'Date' ,'w'=>14,'class'=>'textcenter'),
+//             'due_date'=>array('title'=>'Due Date','w'=>14,'class'=>'textright'),
+//             'price'=>array('title'=>'Total Amount','w'=>18,'class'=>'textright'),
+//             'left_alloc'=>array('title'=>'Left to Allocate','w'=>22,'class'=>'textright')
+//         );
+
+//         $contact = $this->contact_model->get_crm_persons('supplier', 'invoice', $trans->supplier_id);
+
+//         $pdf->order = array(
+//             'debtor'=>null,
+//             'debtor_no'=>$trans->debtor_no,
+//             'name'=>$trans->supp_name,
+//             'delivery'=>$trans->supp_name,
+//             'delivery_address'=>$trans->address,
+//             'date'=>date('d-m-Y',strtotime($trans->tran_date)),
+//             'contact' => (array)$contact,
+//             'order_no'=>$trans->reference,
+//             'reference'=>$trans->reference,
+//             'tax_included'=>'tax_included',
+//             'payment_terms'=>$trans->terms,
+//             'shipping'=>'shipping',
+//             'trans_no'=>'trans_no',
+//             'curr_code'=>$trans->curr_code ,
+//             'total_words'=>price_in_words($trans->Total, ST_CUSTPAYMENT),
+//             'total'=> abs($trans->alloc),
+//             'left_alloc'=>abs($trans->Total)-abs($trans->alloc),
+
+//         );
+//         if( $pdf->order['left_alloc'] < 0.009 ){
+//             $pdf->order['left_alloc'] = 0;
+//         }
+
+//         $pdf->order_html = $this->ci->view('reporting/order',$pdf->order,true);
+
+//         $aux_info = array (
+//             _( "Customer's Reference" ) => array('w'=>16.66,'val'=>$trans->reference),
+//             _( "Type" ) 				=> array('w'=>16.66,'val'=> transaction_type_tostring($trans->type) ),
+//             _('Your GST no.')			=> array('w'=>16.66,'val'=>$trans->gst_no),
+//             _( "Supplier's Reference" ) 		=> array('w'=>16.66,'val'=>$trans->supp_reference),
+//             _( "Due Date" ) 			=> array('w'=>16.66,'val'=> sql2date($trans->due_date) ),
+//             _('Cheque No')			=> array('w'=>16.66,'val'=>$trans->cheque),
+//         );
+
+//         $pdf->author_html = $this->ci->view('reporting/aux_info',array('items'=>$aux_info),true);
+//         $pdf->make_report();
+    }
+
+}

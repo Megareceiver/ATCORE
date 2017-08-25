@@ -1,0 +1,143 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class SalesAgedCustomerCheck {
+
+    function __construct() {
+        global $ci;
+        $this->ci = $ci;
+        $this->db = $ci->db;
+        $page_security = 'SA_FISCALYEARS';
+        $this->debtor_model = module_model_load('debtor');
+        $this->opening_trans_model = module_model_load('trans','opening');
+        $this->gl_model = module_model_load('gl','gl');
+    }
+
+    function index() {
+
+        $data = array('customer_filter'=>'t','date_to'=>Today(),'customer_id'=>NULL);
+        $data['date_to'] = '31-08-2015';
+
+        $view_customer = $data['customer_filter'] == 'c' ? true : false;
+
+//         $debtor_model = module_model_load('debtor');
+        $debtors_detail =  $this->debtor_model->get_details($data['customer_id'],$data['date_to'],true,$view_customer);
+
+
+        $sale_trans_type = array(ST_JOURNAL,ST_BANKPAYMENT,ST_BANKDEPOSIT,ST_SALESINVOICE,ST_CUSTCREDIT,ST_CUSTPAYMENT,ST_OPENING_CUSTOMER,ST_OPENING);
+        $gl_detail = array();
+        foreach ($sale_trans_type AS $type){
+            $gl_detail[] = (object)array('type'=>$type,'balance'=>$this->gl_model->get_details(1200,$type));
+        }
+
+        $gl_discount_detail = $this->gl_model->get_details(4510);
+
+        page('Customer Analyses | Receivable Account');
+        start_form();
+        end_form();
+        module_view('report/gl_receivable',$data);
+        if( !$view_customer ){
+            module_view('report/gl_receivable_tran',array('trans'=>$debtors_detail,'title'=>_('Debtor Transactions Table')));
+//             module_view('report/gl_receivable_tran',array('trans'=>$gl_detail,'title'=>_('GL Transactions Table')));
+//             module_view('report/gl_receivable_tran',array('trans'=>$gl_discount_detail,'title'=>_('GL Transactions of discount Table')));
+        } else {
+            module_view('report/gl_receivable_customers',array('trans'=>$debtors_detail));
+        }
+        end_page();
+    }
+
+    function gl_trans(){
+        $gl_model = module_model_load('gl','gl');
+
+        $debtors = $this->debtor_model->get_debtors();
+//         bug($debtors);die;
+
+        $gl_receivable = $gl_model->get_receivable(1200);
+
+        page('Customer Analyses | GL trans wrong posting');
+        module_view('report/gl_receivable_gl_trans',array('trans'=>$gl_receivable,'debtors'=> $this->debtor_model->get_debtors(),'title'=>_('GL Transactions Checking')));
+        end_page();
+    }
+
+    function analysis(){
+
+
+        $page = array(
+            'title'=>_('GL Transactions Checking'),
+            'check'=>true,
+            'total_only'=>true,
+            'date_begin' => '2015-1-1',
+            'date_end' => '2015-8-31',
+            'debtor_inclue_ob'=>true,
+        );
+        $debtor_no= $this->ci->uri->segment(4);
+        $get_debtors_where = array();
+
+        $page['total_only'] = ($debtor_no) ? false : true;
+
+        if( $debtor_no ){
+            $get_debtors_where['debtor_no'] = $debtor_no;
+            $page['total_only'] = false;
+        }
+        $debtors = $this->debtor_model->get_debtors($get_debtors_where);
+
+
+        $trans = array();
+        $debtor_selected = array();
+        foreach ($debtors AS $k=>$deb){
+            $trans[$k] = array(
+                'debtor'=>$deb,
+                'opening'=>$this->opening_trans_model->balance_total(ST_OPENING_CUSTOMER,$deb->debtor_no),
+                'trans'=>$this->gl_model->get_receivable(1200, $deb->debtor_no, $page['date_end'],$page['debtor_inclue_ob'])
+            );
+            $debtor_selected[] = $deb->debtor_no;
+        }
+        $page['trans'] = $trans;
+        if( !$debtor_no && !$page['debtor_inclue_ob'] ){
+            $page['gl_openning'] = $this->gl_model->opening(1200,ST_OPENING,$page['date_begin']);
+
+            $page['customer_openning'] = $opening_trans_model->balance_total(ST_OPENING_CUSTOMER);
+
+        }
+
+        page('Customer Analyses | GL trans posting');
+        module_view('aged_customer/debtor_group',$page);
+        end_page();
+    }
+
+    function customer_balance(){
+        $page = array(
+            'title'=>_('GL Transactions Checking'),
+            'check'=>true,
+            'total_only'=>true,
+            'date_begin' => '2015-1-1',
+            'date_end' => '2015-8-31',
+            'debtor_inclue_ob'=>true,
+        );
+
+
+        $get_debtors_where = array();
+        $debtor_no= $this->ci->uri->segment(4);
+        if( $debtor_no ){
+            $get_debtors_where['debtor_no'] = $debtor_no;
+            $page['total_only'] = false;
+        }
+        $debtors = $this->debtor_model->get_debtors($get_debtors_where);
+        $trans = array();
+        foreach ($debtors AS $k=>$deb){
+            $trans[$k] = array(
+                'debtor'=>$deb,
+                'opening'=>$this->opening_trans_model->balance_total(ST_OPENING_CUSTOMER,$deb->debtor_no),
+                'trans'=>$this->debtor_model->get_transactions($deb->debtor_no, $page['date_begin'],$page['date_end'])
+            );
+
+        }
+        $page['trans'] = $trans;
+//         bug($trans);die;
+
+        $this->ci->page->add_css('report_html.css');
+        page('Customer Analyses | Customer Balance');
+        module_view('report/customer_balance',$page);
+        end_page();
+    }
+
+}

@@ -1,0 +1,32 @@
+<?php
+class GstReportTaxSummary {
+    function __construct() {
+        $this->report = module_control_load('report','report');
+    }
+    function index(){
+        $this->form();
+    }
+
+    var $type_report = array(
+        array('id' => "input-tax",'title'=>'Total Acquisition and Input Tax for Taxable ')
+    );
+    private function form(){
+        $date = new DateTime('now');
+        $date->modify('last day of this month');
+        $date_first = new DateTime('now');
+        $date_first->modify('first day of this month');
+
+        $this->report->fields = array(
+            'start_date' => array('type'=>'qdate','title'=>_('Start Date'),'value'=>$date_first->format('d-m-Y') ),
+            'end_date' => array('type'=>'qdate','title'=>_('End Date'),'value'=>$date->format('d-m-Y') ),
+            'type_report'=>array('type'=>'options','title'=>_('Type Report'),'value'=>"",'options'=>$this->type_report ),
+        );
+        $submit = array(
+            'UPDATE_ITEM'=>array('Display : GST Summary',"default"),
+        );
+        $this->report->form('GST Summary',$submit);
+
+
+    }
+}
+?>

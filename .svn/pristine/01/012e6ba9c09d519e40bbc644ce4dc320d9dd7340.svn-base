@@ -1,0 +1,36 @@
+<?php
+class HtmlDatatable  {
+    function __construct() {
+        $this->db = get_instance()->db;
+        $this->db->reset();
+    }
+
+    var $limit = 100;
+
+    public function view($tableFields = array(), $query,$elementID_out=NULL){
+        $offset = 0;
+
+
+
+        if( !is_object($query) ){
+            display_db_error("Database have errors!", $this->db->last_query(),false);
+            return FALSE;
+        }
+
+
+        $db = $this->db->query($this->db->last_query()." LIMIT $offset,".$this->limit);
+
+
+
+        if( strlen($elementID_out) >0 ){
+            div_start($elementID_out);
+        }
+
+        module_view('table_items',array('table'=>$tableFields,'items'=>$db->result()),true, true,$module='html' );
+
+        if( strlen($elementID_out) >0 ){
+            div_end();
+        }
+
+    }
+}

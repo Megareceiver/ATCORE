@@ -1,0 +1,91 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class BankReportReconcile   {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+        if( !isset($ci->reporting) ){
+            $ci->load_library('reporting',false,true);
+        }
+
+        $this->reconciled_model = module_model_load('reconciled','gl');
+
+
+//         $this->bank_transaction_model = $ci->model('bank_transaction',true);
+//         $this->gl_trans_model = $ci->model('gl_trans',true);
+//         $this->bank_trans_model = $ci->model('bank_trans',true);
+//         $this->customer_model = $ci->model('cutomer',true);
+
+    }
+
+    var $report_form = array(
+
+    );
+    function index(){
+        $_POST['date'] = "9-10-2016";
+        $_POST['report_type'] = 0;
+        $_POST['bank_account'] = 2;
+        $_POST['reconcile_date'] = '2016-09-01';
+
+        if( $this->ci->input->post() ) {
+            return $this->reconcile_print();
+        }
+
+        $report = module_control_load(NULL,'report',true);
+        $report->fields = array(
+            'date' => array('type'=>'qdate','title'=>_('Start Date'),'value'=>begin_month() ),
+            'orientation'=>array('type'=>'orientation','title'=>_('Orientation')),
+        );
+
+        $report->form('Bank Reconciliation');
+    }
+
+    var $reconcile_report_table = array(
+        'type'      =>array( 'Journal'      ,150 ,'left'),
+        'reference' =>array( 'Reference No.',230 ,'left'),
+        'cust_ref2' =>array( 'Cust Ref',280 ,'left'),
+        'tran_date' =>array( 'Date'         ,320 ,'center'),
+        'debit'     =>array( 'Debits'       ,380 ,'right'),
+        'credit'    =>array( 'Credits'      ,450 ,'right'),
+        'balance'   =>array( 'Balance'      ,515 ,'right'),
+    );
+
+    private function reconcile_print(){
+        $destination = input_val('report_type');
+        $orientation = input_val('orientation');
+        if( !$orientation ){
+            $orientation = 'P';
+        }
+        $date = input_val('date');
+        $comments = NULL;
+
+
+        $reconciled_items =  $this->reconciled_model->get_max_reconciled(input_val('reconcile_date'), input_val('bank_account'));
+        bug($reconciled_items); die;
+
+        if ($destination)
+            include_once(ROOT . "/reporting/includes/excel_report.inc");
+        else
+            include_once(ROOT . "/reporting/includes/pdf_report.inc");
+
+        $params =   array( $comments,"bank name here");
+
+        $rep = new FrontReport(_('BANK RECONCILIATION AS AT '.sql2date($date)), "BankReconcile", user_pagesize(), 9, $orientation);
+
+        $rep->SetHeaderType('BankReconcile');
+
+        list ($headers, $cols, $aligns) = get_instance()->reporting->report_front_params($this->reconcile_report_table);
+        if ($orientation == 'L')
+            recalculate_cols($cols);
+
+        $rep->Font();
+        $rep->Info($params, $cols, $headers, $aligns);
+        $rep->NewPage();
+        $rep->TextCol(0, 3, _('Grand Total'));
+
+        $rep->NewLine();
+        $rep->End();
+        die();
+    }
+}

@@ -1,0 +1,41 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class MaintenanceUpdate {
+    function __construct() {
+        $ci = get_instance();
+        $this->db = $ci->db;
+
+    }
+
+    function do_fix(){
+        $update_methods = get_class_methods($this);
+
+        foreach ($update_methods AS $method){
+            $check = new ReflectionMethod($this, $method);
+
+            if($check->isPublic()){
+            } elseif($check->isPrivate()){
+                $this->$method();
+            } else{
+            }
+        }
+
+    }
+
+    private function supplier_ob(){
+        $ov_amount = "(ob.debit-ob.credit)";
+        $this->db->where(array('ob.type'=>ST_OPENING_SUPPLIER));
+        $this->db->join('supp_trans AS tran','tran.type=ob.type AND tran.trans_no = ob.trans_no','LEFT');
+        $this->db->select("ob.type, ob.trans_no, tran.ov_amount, $ov_amount AS ob_amount");
+        $this->db->where("tran.ov_amount <> $ov_amount");
+        $result = $this->db->get('opening_sale AS ob');
+
+        if( is_object($result) && $result->num_rows > 0 ) foreach ($result->result() AS $ite){
+//             die('check fix supplier ob');
+            if( $ite->ov_amount = $ite->ob_amount * (-1) ){
+                $this->db->where(array('trans_no'=>$ite->trans_no,'type'=>$ite->type))->update('supp_trans',array('ov_amount'=>$ite->ob_amount));
+            }
+        }
+
+    }
+}

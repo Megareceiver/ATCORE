@@ -1,0 +1,57 @@
+<?php
+#error_reporting(E_ALL);
+define('MODULEPATH', dirname(__FILE__).'/ci_module');
+$path_to_root=".";
+include_once("includes/session.inc");
+
+$page_security = 'SA_OPEN';
+ini_set('xdebug.auto_trace',1);
+
+global $ci;
+
+$uris = $ci->uri->segments;
+$call_ci = false;
+
+if( isset($uris[1]) && $uris[1] && isset($uris[2]) && $uris[2] ){
+    $ci->module = $uris[1];
+    $control = $ci->module_control_load($uris[1],$uris[2],true);
+    $ci->template->module = $ci->module;
+
+    if( function_exists('get_post') ){
+        include_once(ROOT . "/includes/ui.inc");
+    }
+    if( $control && is_object($control) ){
+        $call_ci = true;
+        $action = func_name($uris[3]);
+//         if( method_exists($control,$action) ){
+        if ( is_callable(array($control, $action)) ) {
+            $control->$action();
+        } else {
+            $control->index();
+        }
+
+    }
+//     bug($control);die;
+}
+
+
+if ( !$call_ci ){
+
+    $update_fix = module_control_load('update','maintenance');
+    $update_fix->do_fix();
+
+
+    add_access_extensions();
+    $app = &$_SESSION["App"];
+    $app->selected_application = 'H';
+    if (isset($_GET['application'])){
+        $app->selected_application = $_GET['application'];
+    } else {
+        header('Location: index.php?application=H');
+        //$app->selected_application = 'H';
+    }
+    $app->display();
+}
+
+
+?>

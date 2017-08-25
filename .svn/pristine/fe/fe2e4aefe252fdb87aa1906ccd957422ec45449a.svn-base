@@ -1,0 +1,39 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class AdminAuditTrail {
+
+    function __construct() {
+
+    }
+
+    function index(){
+
+        if( $this->ci->uri->uri_string !='admin/audit-trail' ){
+            redirect('admin/audit-trail');
+        }
+
+        page(_("Audit Trail"));
+        start_form();
+
+        table_view($this->table_view,$this->items(),false,false);
+
+
+        $this->edit($selected_id);
+        end_form();
+        end_page();
+    }
+
+    var $table_view = array(
+        'begin'=>array("Type",null,20),
+        'end'=>array("Trans Number",null,20,'date'),
+        'closed_text'=>array("Created by",null,50,),
+        'closed_text'=>array("Description",null,50,),
+        'closed_text'=>array("Trans Date",null,50,),
+
+        'items_action'=>array(NULL,'','AdminFiscalYears_Items')
+    );
+
+    private function items(){
+
+    }
+}

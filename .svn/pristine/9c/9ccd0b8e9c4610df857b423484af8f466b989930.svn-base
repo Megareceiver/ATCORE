@@ -1,0 +1,5 @@
+<?php
+function tran_name($type=1){
+    global $systypes_array;
+    return ( array_key_exists($type, $systypes_array) ) ? $systypes_array[$type] : 'no transaction name';
+}

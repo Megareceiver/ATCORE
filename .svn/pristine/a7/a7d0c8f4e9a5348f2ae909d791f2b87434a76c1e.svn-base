@@ -1,0 +1,58 @@
+<?php
+
+class at_smarty {
+    static $smarty, $ci;
+    function __construct(){
+        $ci = get_instance();
+        if( isset($ci->smarty) ){
+            self::$smarty = $ci->smarty;
+        }
+        self::$ci = $ci;
+    }
+
+    static function background_red($template){
+        $num1 = ( isset($template['num1']) )?$template['num1']: NULL;
+        $num2 = ( isset($template['num2']) )?$template['num2']: NULL;
+        $dec = user_amount_dec();
+        return ( number_format2($num2,$dec) != number_format2($num1,$dec) ) ? 'background-color: red' : NULL;
+    }
+
+    static function tran_detail_view($template,$params){
+        global $systypes_array;
+        $tran_type = ( isset($template['type']) )?$template['type']: NULL;
+        $tran_no = ( isset($template['tran_no']) )?$template['tran_no']: NULL;
+
+        $title = null;
+        if( $tran_type ){
+            $title = isset($systypes_array[$tran_type]) ? $systypes_array[$tran_type] : $tran_type ;
+        }
+        if( isset($template['title']) ){
+            $title = $template['title'];
+        }
+        switch ($tran_type){
+            case ST_SALESINVOICE:
+                $uri = "sales/view/view_invoice.php?trans_type=$tran_type&trans_no=$tran_no";
+                break;
+            case ST_CUSTPAYMENT:
+                $uri = "sales/view/view_receipt.php?trans_type=$tran_type&trans_no=$tran_no";
+                break;
+            default:
+                $uri = '#';break;
+        }
+
+        return anchor($uri,$title);
+    }
+
+
+    static function trans_type($template=null){
+        global $ci,$systypes_array;
+        $type = ( isset($template['type']) )?$template['type']:null;
+        return ( isset($systypes_array[$type]) ) ? $systypes_array[$type] : $type;
+
+    }
+
+    static function submit_form($template){
+        $html = '<button title="Refresh Inquiry" value="Search" name="RefreshInquiry" aspect="default" type="submit" class="ajaxsubmit">Search</button>';
+        return $html;
+    }
+}

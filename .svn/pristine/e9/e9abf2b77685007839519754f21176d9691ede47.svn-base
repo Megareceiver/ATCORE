@@ -1,0 +1,58 @@
+<?php
+class Supplier_Trans_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+    }
+
+    function get_transactions($supplier_id,$date_from=null,$date_to=null,$type=ST_SUPPINVOICE){
+        $date_from = date2sql($date_from);
+        $date_to = date2sql($date_to);
+
+        $select = 'tran.*, (tran.ov_amount+tran.ov_gst+tran.ov_discount) AS total_amount';
+        $select.= ", ( tran.type = ".ST_SUPPINVOICE." AND tran.due_date < '$date_to') AS OverDue";
+        $this->tran->select($select,false)->from('supp_trans AS tran');
+        //alloc AS allocated
+        $this->tran->select("IF(tran.type=".ST_SUPPINVOICE.",
+            (SELECT SUM(alloc.amt) FROM supp_allocations AS alloc WHERE alloc.trans_type_to = tran.type AND alloc.trans_no_to=tran.trans_no AND alloc.date_alloc <='$date_to' ),
+            tran.alloc ) AS allocated",false);
+            $this->tran->where('ov_amount !=',0);
+
+            $this->tran->where('supplier_id',$supplier_id);
+            if( $date_from ){
+            $this->tran->where('tran_date >=',$date_from);
+            }
+            if( $date_to ){
+                $this->tran->where('tran_date <=',$date_to);
+                // 	        $this->tran->where('due_date <',$date_to);
+            }
+            $data = $this->tran->order_by('tran_date')->get()->result();
+            // 	    bug( $this->tran->last_query() );die;
+            return $data;
+    }
+
+    function get_open_balance($supplier_id,$date_to=null){
+        $select = ' SUM(  alloc ) AS allocated ';
+
+        $select .=', SUM( IF(type =  '.ST_SUPPINVOICE.' OR type = '.ST_BANKDEPOSIT.' , ( ov_amount + ov_gst + ov_discount), 0) ) AS debit';
+        $select .=', SUM( IF( type <> '.ST_SUPPINVOICE.' AND type <> '.ST_BANKDEPOSIT.', -(ov_amount + ov_gst + ov_discount), 0) ) AS credit';
+        $select .=', SUM( '
+            //  .' IF(type = '.ST_SUPPINVOICE.' OR type = '.ST_BANKDEPOSIT.', ( ov_amount + ov_gst + ov_discount - alloc), (ov_amount + ov_gst + ov_discount + alloc))'
+        .'CASE supp_trans.type'
+            .' WHEN '.ST_SUPPINVOICE.' THEN ov_amount + ov_gst + ov_discount - alloc '
+                .' WHEN '.ST_BANKDEPOSIT.' THEN ov_amount + ov_gst + ov_discount - alloc '
+                    .' WHEN '.ST_OPENING_SUPPLIER.' THEN -alloc - ov_amount - ov_gst - ov_discount '
+                        .' ELSE ov_amount + ov_gst + ov_discount + alloc '
+                            .'END'
+                                .') AS outstanding';
+
+
+
+        $data = $this->tran->select($select,false)->where(array('tran_date <'=>date2sql($date_to),'supplier_id'=>$supplier_id,'ov_amount !='=>0))->order_by('supplier_id')->get('supp_trans');
+        if( is_object($data) ){
+            return $data->row();
+        } else {
+            bug( $this->tran->last_query() );die;
+        }
+
+    }
+}

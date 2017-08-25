@@ -1,0 +1,58 @@
+<?php
+class BankReconciled_Model extends CI_Model {
+	function __construct(){
+		parent::__construct();
+	}
+
+	function get_max_reconciled($date, $bank_account)
+	{
+	    $date = date2sql($date);
+	    if ($date == 0)
+	        $date = '0000-00-00';
+
+	    $this->db->select("MAX(reconciled) as last_date",false);
+	    $this->db->select("SUM(IF(reconciled<='$date', amount, 0)) as end_balance",false);
+	    $this->db->select("SUM(IF(reconciled<'$date', amount, 0)) as beg_balance",false);
+	    $this->db->select("SUM(amount) as total",false);
+
+	    $this->db->where('bank_act',$bank_account);
+//         $this->db->where("trans.reconciled IS NOT NULL");
+	    $result = $this->db->get('bank_trans trans');
+
+	    if( !is_object($result) ){
+	        check_db_error("Cannot retrieve reconciliation data", $this->db->last_query());
+
+	    } else {
+            return $result->row();
+	    }
+	}
+
+	function get_bank_account_reconcile($bank_account, $reconcile_date, $show_reconciled=true)
+	{
+	    $reconcile_date = date2sql($reconcile_date);
+
+	    $this->db->select("type, trans_no, ref, trans_date, amount,	person_id,cheque, person_type_id, reconciled, id");
+	    $this->db->from("bank_trans");
+	    $this->db->where("bank_act",$bank_account);
+
+	    $this->db->where('type NOT IN ('.ST_OPENING_BANK.')');
+
+	    if( !$show_reconciled ){
+	        $this->db->where("reconciled IS NULL");
+	    } else {
+	        $this->db->where(" (reconciled IS NULL OR reconciled='". ($reconcile_date) ."') ");
+	    }
+	    $this->db->where("ABS(amount) <> 0");
+
+	    $this->db->where('trans_date <=',$reconcile_date);
+	    $result = $this->db->order_by('trans_date, id')->get();
+
+	    if( !is_object($result) ){
+	        check_db_error("Cannot retrieve reconciliation data", $this->db->last_query());
+
+	    } else {
+	        return $result->result();
+	    }
+
+	}
+}

@@ -1,0 +1,16 @@
+<?php
+function update_source_ref($trans_type,$trans_no,$ref){
+    global $ci;
+    
+    $data = array('trans_type'=>$trans_type,'trans_no'=>$trans_no);
+    $ref_exit = $ci->db->where($data)->get('source_reference')->row();
+    if( $ref_exit && isset($ref_exit->id)){
+        $ci->db->where($data)->update('source_reference',array('reference'=>$ref));
+    } else {
+        $data['reference'] = $ref;
+        $ci->db->insert('source_reference',$data);
+    }
+    
+//     bug($ci->db->last_query());
+} 
+?>

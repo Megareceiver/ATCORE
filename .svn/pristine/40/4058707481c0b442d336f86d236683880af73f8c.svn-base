@@ -1,0 +1,9 @@
+.form-control.inputdate {
+	width: 124px;
+}
+.form-control.inputdate .icon {
+	top: 1px;
+}
+.tablestyle_noborder .select select {
+	height: 24px;
+}

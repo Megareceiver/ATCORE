@@ -1,0 +1,7 @@
+<?php
+if ( !function_exists('table_view') ){
+    function table_view($table=array(),$items=NULL,$return=false,$page_padding=true){
+        $ci = get_instance();
+        $ci->view('common/table_view',array('table'=>$table,'items'=>$items,'page_padding'=>$page_padding),$return);
+    }
+}

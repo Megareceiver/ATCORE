@@ -1,0 +1,49 @@
+<?php
+class Gl_Allocation_Model extends CI_Model {
+	function __construct(){
+		parent::__construct();
+// 		$this->void_model = module_model_load('tran','void');
+	}
+
+	function str_sum_alloc_to($trans_no=NULL,$tran_type=NULL, $date_to = NULL, $date_from=NUll){
+	    $this->db->reset();
+        $db = clone $this->db;
+
+        $db->select('SUM(allo.amt)')->from('cust_allocations AS allo');
+        $db->where("allo.trans_no_to = $trans_no AND allo.trans_type_to= $tran_type");
+//         $db->where('allo.trans_type_',ST_CUSTPAYMENT);
+
+        $db->join('debtor_trans AS bank_tran','bank_tran.type=allo.trans_type_from AND bank_tran.trans_no=allo.trans_no_from','LEFT');
+        $db->where('bank_tran.trans_no NOT IN ( SELECT voided.id FROM voided AS voided WHERE voided.type=bank_tran.type )');
+        if( is_date($date_from) ){
+            $db->where('bank_tran.tran_date >=',date2sql($date_from));
+        }
+        if( is_date($date_to) ){
+            $db->where('bank_tran.tran_date <=',date2sql($date_to));
+        }
+
+        $sql = $db->query_compile();
+        return $sql;
+	}
+
+	function str_sum_alloc_from($trans_no=NULL,$tran_type=NULL, $date_to = NULL, $date_from=NUll){
+	    $this->db->reset();
+	    $db = clone $this->db;
+
+	    $db->select('SUM(allo.amt)')->from('cust_allocations AS allo');
+	    $db->where("allo.trans_no_from = $trans_no AND allo.trans_type_from= $tran_type");
+// 	    $db->where('allo.trans_type_from',ST_CUSTPAYMENT);
+
+	    $db->join('debtor_trans AS invoice_tran','invoice_tran.type=allo.trans_type_to AND invoice_tran.trans_no=allo.trans_no_to','LEFT');
+	    $db->where('invoice_tran.trans_no NOT IN ( SELECT voided.id FROM voided AS voided WHERE voided.type=invoice_tran.type )');
+	    if( is_date($date_from) ){
+	        $db->where('invoice_tran.tran_date >=',date2sql($date_from));
+	    }
+	    if( is_date($date_to) ){
+	        $db->where('invoice_tran.tran_date <=',date2sql($date_to));
+	    }
+
+	    $sql = $db->query_compile();
+	    return $sql;
+	}
+}

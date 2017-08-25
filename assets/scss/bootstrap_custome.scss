@@ -1,0 +1,23 @@
+
+
+.text-center {
+    text-align: center;
+}
+
+
+
+@import "accounting/form";
+@import "accounting/table";
+@import "accounting/icon19";
+
+@import "bootstrap/variables";
+@import "bootstrap/_glyphicons";
+
+
+
+
+.linebreak {
+	line-height: 1px;
+	background-color: #cccccc;
+	margin: 10px 0;
+}

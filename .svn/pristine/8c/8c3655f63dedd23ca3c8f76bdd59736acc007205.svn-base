@@ -1,0 +1,18 @@
+<?php
+function page_add_css($file=NULL){
+    $ci = get_instance();
+    $ci->page->add_css($file);
+
+}
+
+
+function module_view($view_path=NULL,$data=array(),$display = true, $use_theme=true,$module=NULL ){
+    $ci = get_instance();
+    $ci->temp_view($view_path,$data,$use_theme,$module,$display);
+}
+
+function module_model_load($model=null,$module=null,$return=false){
+    $ci = get_instance();
+    return $ci->module_model($module,$model,$return);
+}
+

@@ -1,0 +1,89 @@
+{if isset($table)}
+<div class="table-responsive">
+
+	<table width=100% cellpadding=2 cellspacing=0 class="table-striped table-hover table-headfixed" >
+	<thead><tr>
+	{foreach $table AS $field=>$title}
+		{if $title|is_array}
+			<td {if isset($title.1)} class="{$title.1}" {/if} {if isset($title.2)} style="width:{$title.2}%"{/if}>{$title.0}</td>
+		{else}
+			<td>{$title}</td>
+		{/if}
+
+	{/foreach}
+	</tr></thead>
+
+
+	<tbody>
+	{assign var=balance_total value=0}
+	{assign var=credit_total value=0}
+	{assign var=debit_total value=0}
+
+	{assign var=balance value=0}
+	{assign var=credit value=0}
+	{assign var=debit value=0}
+	{assign var=opening value=0}
+
+	{if $suppliers|@count }
+	{foreach $suppliers AS $supp}
+		{$opening=0}
+		{$balance=0}
+		{$credit=0}
+		{$debit=0}
+		{if isset($supp->opening->credit) && isset($supp->opening->debit)}
+			{$opening= $supp->opening->debit- $supp->opening->credit}
+			{$balance= $balance + $opening}
+		{/if}
+
+
+		<tr class="header">
+			<td colspan="2">{$supp->name}</td>
+			<td class="center">{if ABS($opening) > 0 }Open Balance{/if}</td>
+			<td class="center" >{$supp->curr_code}</td>
+			<td class="right">{if isset($supp->opening->dedit)}{number_format num=$supp->opening->dedit zero=0}{/if}</td>
+			<td class="right">{if isset($supp->opening->credit)} {number_format num=$supp->opening->credit zero=0} {/if}</td>
+			<td class="right">{number_format num=$opening zero=0}</td>
+		</tr>
+
+		{if $supp->trans|@count }{foreach $supp->trans AS $tran}
+		<tr>
+			<td>{trans_type type=$tran->type}</td>
+			<td>{$tran->trans_no}</td>
+			<td>{$tran->supp_reference}</td>
+			<td class="center">{date_format time=$tran->tran_date}</td>
+			<td class="right">{number_format num=$tran->debit zero=0}</td>
+			<td class="right">{number_format num=$tran->credit zero=0}</td>
+
+
+			{$debit= $debit + $tran->debit}
+			{$credit= $credit + $tran->credit}
+			{$balance= $balance + $tran->debit - $tran->credit}
+			<td class="right">{number_format num=$balance}</td>
+		</tr>
+		{/foreach}{/if}
+		{$debit_total= $debit + $debit_total}
+		{$credit_total= $credit + $credit_total}
+		{$balance_total= $balance + $balance_total}
+		<tr class="header">
+		<td colspan="3" class="left">Total</td>
+		<td></td>
+		<td class="right"></td>
+		<td class="right"></td>
+		<td class="right">{number_format num=$balance}</td>
+		</tr>
+	{/foreach}{/if}
+
+	<tr class="header" >
+		<td class="center" colspan="2">Ending  Balance</td>
+		<td class="center">{$date_to}</td>
+		<td></td>
+		<td class="right">{number_format num=$debit_total absolute=1}</td>
+		<td class="right">{number_format num=$credit_total absolute=1}</td>
+		<td class="right">{number_format num=$balance_total}</td>
+	</tr>
+
+	</tbody>
+
+	</table>
+</div>
+{/if}

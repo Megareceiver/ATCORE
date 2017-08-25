@@ -1,0 +1,18 @@
+<?php
+class currency extends CI_finput{
+	function input($name,$val,$group=0,$input_return_type='html',$readonly=false){
+		$ci = get_instance();
+// 		if( !$value ) {
+// 		    $value = get_company_pref('curr_default');
+// 		}
+
+        $options = array();
+
+		$items_query = $ci->db->order_by('currency', 'ASC')->get('currencies');
+		if( is_object($items_query) ){ foreach ($items_query->result() AS $curr){
+            $options[] = array('id'=>$curr->curr_abrev,'title'=>$curr->curr_abrev.' - '.$curr->currency);
+	    }}
+        $class = 'combo2 form-control';
+		return $this->options($name,$options,$val,'-No Currency Filter-',$class);
+	}
+}

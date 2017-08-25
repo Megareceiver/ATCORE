@@ -1,0 +1,20 @@
+<?php
+function tran_name($type=1){
+    global $systypes_array;
+    return ( array_key_exists($type, $systypes_array) ) ? $systypes_array[$type] : 'no transaction name';
+}
+
+function trans_view($type, $trans_no,$label=""){
+    switch ($type){
+        case ST_SALESINVOICE:
+        case ST_CUSTCREDIT:
+        case ST_CUSTCREDIT:
+        case ST_CUSTCREDIT:
+            $anchor = get_trans_view_str($type, $trans_no, $label); break;
+        case ST_SUPPAYMENT:
+            $anchor = $label; break;
+        default:
+            $anchor = get_trans_view_str($type, $trans_no, $label); break;
+    }
+    return $anchor;
+}

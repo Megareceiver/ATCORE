@@ -1,0 +1,18 @@
+<div class="row borderall" style="margin-bottom: 10px;">
+	<div class="col-md-5">
+		{formInputGroup field=$supplier_id name='supplier_id' }
+	</div>
+	<div class="col-md-3">
+		{formInputGroup name='date_from' }
+	</div>
+	<div class="col-md-3">
+		{formInputGroup field=$date_to name='date_to' }
+	</div>
+
+<div class="col-md-12 linebreak"></div>
+
+
+	<div class="col-md-1"><div class="form-group">{submit_button title="Show" atype=1}</div>
+
+	</div>
+</div>

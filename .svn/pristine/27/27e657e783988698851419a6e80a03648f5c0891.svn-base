@@ -1,0 +1,4 @@
+<?php
+$config['rewrite_short_tags'] = FALSE;
+$config['uri_protocol']	= 'REQUEST_URI';
+$config['assets_url'] = NULL;

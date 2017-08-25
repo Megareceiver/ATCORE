@@ -1,0 +1,12 @@
+
+
+.text-center {
+    text-align: center;
+}
+
+
+
+@import "accounting/form";
+@import "accounting/table";
+
+

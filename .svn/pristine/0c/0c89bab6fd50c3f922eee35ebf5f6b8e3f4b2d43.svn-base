@@ -1,0 +1,48 @@
+.icon19 {
+	width: 19px;
+	height: 19px;
+	display: inline-block;
+	float: left;
+	margin-left: 2px;
+}
+.icon19 input[type=checkbox]{
+	margin-top: 3px;
+	margin-left: 3px;
+}
+
+[class^="icon19_"] {
+	display: inline-block;
+	height: 19px;
+	width: 19px;
+	text-indent: -999999px;
+	background-image: url("../images/icon19.png");
+}
+
+a:HOVER [class^="icon19_"] {
+	opacity: 0.5;
+    filter: alpha(opacity=50); /* For IE8 and earlier */
+}
+
+.icon19_edit {
+	background-position: 0 0;
+}
+
+button:HOVER .icon19_edit {
+	background-position: 0 -19px;
+}
+
+.icon19_del {
+	background-position: -19px 0;
+}
+
+button:HOVER .icon19_del {
+	background-position: -19px -19px;
+}
+
+.icon19_gl {
+	background-position: -38px 0;
+}
+
+.icon19_printlink {
+	background-position: -57px 0;
+}

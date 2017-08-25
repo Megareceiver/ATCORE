@@ -1,0 +1,202 @@
+<?php
+class DocumentsBookkeepers  {
+    function __construct() {
+        $this->db = get_instance()->db;
+        $this->input = get_instance()->input;
+        $this->datatable = module_control_load('datatable','html');
+        $this->modal = module_control_load('modal','html');
+    }
+
+    var $document_tran_types = array(
+            'bank_deposit'=>'Bank Deposit',
+            'bank_payment'=>'Bank Payment',
+            'bank_statement'=>'Bank Statement',
+            'customer_bill'=>'Customer Bill',
+            'customer_receipt'=>'Customer Receipt',
+            'expense_bill'=>'Expense Bill',
+            'expense_payment'=>'Expense Payment',
+            'supplier_bill'=>'Supplier Bill',
+            'supplier_payment'=>'Supplier Payment'
+        );
+
+    var $fields = array(
+        'tran_type' => array('type'=>'options','title'=> 'Document Type','value'=>null ),
+        'date_from' => array('type'=>'date','title'=> 'From','value'=>"" ),
+        'date_to' => array('type'=>'date','title'=> 'To','value'=>NULL ),
+    );
+
+    function index(){
+
+
+
+        $this->fields['date_from']['value'] = begin_month();
+        $this->fields['date_to']['value'] = end_month();
+        $this->fields['tran_type']['options'] = $this->document_tran_types;
+
+        $detail_id=post_edit('detail');
+        $file_id=post_edit('file');
+
+        $delete_id=post_edit('delete');
+        $delete_confirm = post_edit('removeconfirm');
+
+
+        $taget_id = max($file_id,$detail_id,$delete_id,$delete_confirm);
+
+        if( $this->input->post('SUBMIT') OR $taget_id ){
+            foreach ($this->fields AS $k=>$f){
+                $this->fields[$k]['value'] = input_post($k);
+            }
+
+            if ($delete_confirm) {
+                $this->item_delete($delete_confirm);
+            }
+        }
+
+
+        add_js('js/table.js');
+        add_js('js/modal.js');
+        page("Documents Upload");
+
+        global $Ajax;
+        if(in_ajax()) {
+            if( $this->input->post('SUBMIT') OR $delete_id OR $delete_confirm){
+                $Ajax->activate('_page_body');
+            }
+
+            if ( $detail_id OR $file_id OR $delete_id) {
+                $Ajax->activate('_atmodel');
+            }
+
+        }
+
+
+        start_form();
+        module_view('inquiry/filter-control',$this->fields);
+        $this->datatable->view($this->datatable_view, $this->document_items($this->fields),'trans_tbl');
+
+
+        div_start('_atmodel');
+        if ( $detail_id) {
+            $this->item_view($detail_id);
+        } else if ( $file_id ) {
+            $this->item_view_file($file_id);
+        } elseif ( $delete_id ) {
+            $this->modal->confirm(
+                array(
+                    'button_ok'=>array('name'=>"removeconfirm$delete_id",'title'=>'Yes'),
+                    'content'=>'Are you sure to delete '.$this->upload_title(input_val('tran_type')).' Document?',
+                    'title'=>"Confim Delete")
+            );
+        }
+
+        div_end();
+        end_form();
+        end_page();
+    }
+
+
+
+    var $datatable_view = array(
+        'tran_type'=>array('Document Type','left',50,'bookeeper_type'),
+
+        'datetime'=>array('Upload Date','center',15),
+        'detail'=>array('Data View','center',10),
+        'file'=>array('Document View','center',10),
+        'action'=>array('','center',10)
+    );
+
+    private function document_items(){
+
+        if( is_date($date_from = $this->fields['date_from']['value']) ){
+            $this->db->where('datetime >=', date("Y-m-d",strtotime($date_from))." 0:0:0");
+        }
+
+        if( is_date($date_to = $this->fields['date_to']['value']) ){
+            $this->db->where('datetime <=',date("Y-m-d",strtotime($date_to))." 59:59:59");
+        }
+
+        if( strlen($tran_type=$this->fields['tran_type']['value']) <1 ){
+            $tran_type = key($this->document_tran_types);
+        }
+        $this->db->where('tran_type',$tran_type);
+
+        $this->db->from('documents_bookkeepers');
+        $query = $this->db->order_by('datetime ASC')->get();
+        $data = $query->result();
+
+        global $session;
+
+        $DataReturn = array();
+        if( !empty($data) ) foreach ($data AS $field){
+            $data_submit = unserialize($field->data);
+            $DataReturn[] = (object)array(
+                'tran_type'=>$this->upload_title($field->tran_type),
+                'datetime'=>sql2date($field->datetime),
+                'detail'=>'<button href="#" class="ajaxsubmit" name="detail'.$field->id.'" value="1" type="submit">
+                  <span class="glyphicon glyphicon-list-alt" aria-hidden="true"></span> Detail </button>',
+
+                'file'=>'<button class="ajaxsubmit" name="file'.$field->id.'" value="1" type="submit">
+                  <span class="glyphicon glyphicon-picture" aria-hidden="true"></span> File </button>',
+                'action'=>'<button class="ajaxsubmit" name="delete'.$field->id.'" value="1" type="submit">
+                  &nbsp;<span class="glyphicon glyphicon-trash" aria-hidden="true"></span>&nbsp;</button>',
+
+            );
+        }
+
+
+        return $DataReturn;
+    }
+
+    private function upload_title($str=NULL){
+        $title = null;
+        if( strlen($str) > 0 ){
+            $data = explode('_', $str);
+            if( count($data) > 0 ) foreach ($data AS $t){
+                $title .= " ".ucfirst($t);
+            }
+        }
+        return $title;
+    }
+
+    private function item_view($id=0){
+        $data = $this->db->where('id',$id)->get('documents_bookkeepers')->row();
+        if( is_object($data) AND isset($data->id) ){
+            $uploaded = unserialize($data->data);
+            $fields = array(
+            );
+            foreach ($uploaded AS $k=>$val){
+                if( $k != 'file' ){
+                    if( strpos($k, '_amount') OR strpos($k, '_open_balance') ){
+                        $val = number_total(floatval($val));
+                    }
+                    $fields[$k] = array('type'=>'text','title'=>$this->upload_title($k),'value'=>$val );
+                }
+
+            }
+            $buttons = array('posting'=>array('title'=>'Post Transaction','attributes'=>' class="btn btn-primary" ','icon'=>'send') );
+            $this->modal->view(array('fields'=>$fields,'title'=>$this->upload_title($data->tran_type)." Detail",'buttons'=>$buttons ));
+        }
+    }
+
+    private function item_view_file($id=0){
+        $data = $this->db->where('id',$id)->get('documents_bookkeepers')->row();
+        if( is_object($data) AND isset($data->id) ){
+            $uploaded = unserialize($data->data);
+
+            if( isset($uploaded['file']) && strlen($file=$uploaded['file']) > 0 ){
+                $this->modal->view_img(array('img'=>config_item('assets_domain').$file,'title'=>$this->upload_title($data->tran_type)." File",'width'=>800 ));
+            }
+        }
+    }
+
+    private function item_delete($id=0){
+        $data = $this->db->where('id',$id)->get('documents_bookkeepers')->row();
+        if( is_object($data) AND isset($data->id) ){
+            $uploaded = unserialize($data->data);
+            $this->db->where('id',$id)->delete('documents_bookkeepers');
+            if( isset($uploaded['file']) && strlen($file=$uploaded['file']) > 0 && ($file_path=realpath(config_item('assets_path').$file))){
+                unlink($file_path);
+            }
+        }
+    }
+}

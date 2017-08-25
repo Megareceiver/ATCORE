@@ -1,0 +1,110 @@
+<?php
+class Gl_Trans_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+        $this->void_model = module_model_load('tran','void');
+    }
+
+    function add_gl_trans($data=null,$currency=null,$return_sql=false){
+        global $use_audit_trail;
+
+        if( !$data['account'] )
+            return false;
+
+        $data['tran_date'] = date2sql($data['tran_date']);
+
+        if( array_key_exists('rate', $data) && $data['rate'] >0 ){
+            $data['amount'] = round2($data['amount']*$data['rate'], user_price_dec());
+        } else if ($currency != null ){
+
+            $data['amount'] = to_home_currency($data['amount'], $currency, $data['tran_date']);
+        } else {
+            $data['amount'] = round2($data['amount'], user_price_dec());
+        }
+
+        if( abs($data['amount']) <= 0){
+            return 0;
+        }
+        if( array_key_exists('rate', $data) ){
+            unset($data['rate']);
+        }
+
+        if ( $data['dimension_id'] == null || $data['dimension_id'] < 0)
+            $data['dimension_id'] = 0;
+        if ( $data['dimension2_id'] == null || $data['dimension2_id'] < 0)
+            $data['dimension2_id'] = 0;
+
+        if (isset($use_audit_trail) && $use_audit_trail){
+            if ( $data['memo_'] == "" || $data['memo_'] == null)
+                $data['memo_'] = $_SESSION["wa_current_user"]->username;
+            else
+                $data['memo_'] = $_SESSION["wa_current_user"]->username . " - " . $data['memo_'];
+        }
+
+        $this->db->reset();
+        if( !$return_sql ){
+            $sql = $this->db->insert('gl_trans',$data,true );
+            db_query($sql, "The GL transaction could not be inserted");
+        } else {
+            $this->db->insert('gl_trans',$data);
+        }
+
+        return  $data['amount'];
+
+    }
+
+    function add_tax_trans_detail($data){
+
+        if ( !array_key_exists('trans_type', $data) || !array_key_exists('trans_no', $data) ){
+            display_error(_("DB has error!"));
+        }
+
+        $where = array('trans_type'=>$data['trans_type'],'trans_no'=>$data['trans_no']);
+        $this->db->reset();
+        $existed = $this->db->where($where)->get('trans_tax_details')->row();
+        $this->db->reset();
+        if( $existed && isset($existed->trans_no) ){
+            $sql = $this->db->update('trans_tax_details',$where,$data,1,true );
+        } else {
+            $sql = $this->db->insert('trans_tax_details',$data,true );
+        }
+        db_query($sql, "Cannot save trans tax details");
+
+    }
+
+    function get_gl_trans_from_to($date_from=NULL, $date_to=NULL, $account, $dimension=0, $dimension2=0, $person_type_id=0,$person_id=0) {
+        $from = date2sql($from_date);
+        $to = date2sql($to_date);
+
+        $this->db->select('SUM(gl.amount) AS total',false)->from('gl_trans AS gl');
+        $this->db->where('gl.account',$account);
+        if( is_date($date_from) ){
+            $this->db->where('gl.tran_date >=',date2sql($date_from));
+        }
+        if( is_date($date_to) ){
+            $this->db->where('gl.tran_date <=',date2sql($date_to));
+        }
+        if ($dimension != 0){
+            $this->db->where('gl.dimension_id',$dimension<0?0:db_escape($dimension) );
+        }
+        if ($dimension2 != 0){
+            $this->db->where('gl.dimension2_id',$dimension2<0?0:db_escape($dimension2));
+        }
+
+        if( $person_type_id ){
+            $this->db->where('gl.person_type_id',$person_type_id);
+        }
+        if( $person_id ){
+            $this->db->where('gl.person_id',$person_id);
+        }
+
+        $this->void_model->not_voided('gl.type','gl.type_no');
+        $result = $this->db->get();
+        if( is_object($result) ){
+            $data  = $result->row();
+            return $data->total;
+        }
+
+
+    }
+}

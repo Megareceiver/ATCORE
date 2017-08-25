@@ -1,0 +1,469 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+class Admin_Fiscalyear_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+
+
+    }
+
+    function add($data = array()) {
+        $data['begin'] = date2sql( $data['begin'] );
+        $data['end'] = date2sql( $data['end'] );
+
+        $this->db->insert('fiscal_year',$data);
+        $id = $this->db->insert_id();
+        if( !$id ){
+            display_error( _("could not add fiscal year"));
+            return false;
+        }
+        return $id;
+    }
+
+    function update($id,$data=array()){
+        if( !$id || !is_array($data) )
+            return false;
+        $this->db->update('fiscal_year',$data,array('id'=>$id));
+        return true;
+
+    }
+
+    function items(){
+        $this->db->select("IF(closed = 1, 'Yes', 'No' ) AS closed_text",false);
+        $result = $this->db->select('fiscal_year.*')->order_by('begin')->get('fiscal_year');
+        if( $result->num_rows > 0 ){
+            return $result->result();
+        } else {
+            return array();
+        }
+    }
+
+    function check_years_before($date, $closed=false){
+        if (!$closed) {
+            $this->db->where('closed',0);
+        }
+
+        $result = $this->db->where('begin <',date2sql($date))->get('fiscal_year');
+        if( is_object($result) ){
+            return ( count($result->result()) > 0);
+        } else {
+            display_error( _("could not check fiscal years before"));
+        }
+        return false;
+    }
+
+
+    function get_fiscalyear($id=0) {
+        if( !$id ) {
+            display_error( _("could not get fiscal year without ID"));
+            return false;
+        }
+
+        $result = $this->db->where('id',$id)->get('fiscal_year');
+
+        if( $result->num_rows > 0 ){
+            return $result->row();
+        } else {
+            display_error( _("could not get fiscal year"));
+        }
+    }
+
+    function close_year($year_id=0) {
+	   $retained_earnings_act  = get_company_pref('retained_earnings_act');
+	   $profit_loss_year_act   = get_company_pref('profit_loss_year_act');
+
+	   if (get_gl_account($retained_earnings_act) == false || get_gl_account($profit_loss_year_act) == false){
+	       display_error(_("The Retained Earnings Account or the Profit and Loss Year Account has not been set in System and General GL Setup"));
+	       return false;
+	   }
+
+	   if (!is_account_balancesheet($retained_earnings_act) || is_account_balancesheet($profit_loss_year_act)) {
+	       display_error(_("The Retained Earnings Account should be a Balance Account or the Profit and Loss Year Account should be an Expense Account (preferred the last one in the Expense Class)"));
+	       return false;
+        }
+
+        $year_select = $this->get_fiscalyear($year_id);
+
+        if( !$year_select || !isset($year_select->end ) ){
+            display_error(_("Must select Fiscal Year"));
+            return false;
+        } else {
+            $date_end = $year_select->end;
+        }
+//         $to = $myrow->end;
+
+        //retrieve total balances from balance sheet accounts
+        $this->db->select('SUM(amount) AS sum_amount',false)->from('gl_trans AS gl');
+        $this->db->join('chart_master AS acc','acc.account_code = gl.account','INNER');
+        $this->db->join('chart_types AS acc_type','acc_type.id = acc.account_type','INNER');
+
+        $this->db->join('chart_class AS acc_class','acc_class.cid = acc_type.class_id','INNER');
+        $this->db->where(array('acc_class.ctype >='=>CL_ASSETS,'acc_class.ctype <='=>CL_EQUITY));
+
+        $result = $this->db->where('gl.tran_date <=',$date_end )->get();
+
+
+        $balance = 0;
+        if( is_object($result) ){
+            $data = $result->row();
+            $balance = floatval($data->sum_amount);
+        } else {
+            display_error( _("The total balance could not be calculated"));
+            return;
+        }
+
+        if( $balance != 0 ){
+            $trans_type = ST_JOURNAL;
+    		$trans_id = get_next_trans_no($trans_type);
+
+    		$gl_trans = new gl_trans();
+            $gl_trans->set_value('type',$trans_type);
+            $gl_trans->set_value('type_no',$trans_id);
+            $gl_trans->set_value('tran_date',$date_end);
+
+            $gl_trans->add_trans($retained_earnings_act,-$balance,0,0,_("Closing Year"),$rate=1);
+            $gl_trans->add_trans($profit_loss_year_act, +$balance,0,0,_("Closing Year"),$rate=1);
+
+            $gl_trans->do_gl_trans();
+
+
+        }
+        return true;
+
+    }
+
+    function open_year($id=0){
+        $row = $this->get_fiscalyear($id);
+        if( $row->begin && is_date($row->begin) ){
+            $audit_trail_model = module_model_load('audit_trail','admin',true);
+            $audit_trail_model->open_transactions($row->begin);
+        }
+    }
+
+    function in_fiscalyears($date=NULL,$closed=0){
+        if( !$date )
+            return false;
+
+        $date = date2sql($date);
+        $result = $this->db->where(array('end >='=>$date,'begin <='=>$date,'closed'=>intval($closed)))->get('fiscal_year')->row();
+
+        return count($result) > 0 ? true : false;;
+    }
+
+    function check_begin_end_date($from, $to) {
+        $data = $this->db->select('MAX(end) AS max, MIN(begin) AS min',false)->get('fiscal_year')->row();
+
+        if( count($data) < 1 )
+            return true;
+
+        $max = add_days($data->max, 1);
+        $min = add_days($data->min, -1);
+        return (strtotime($max) === strtotime($from) || strtotime($min) === strtotime($to) );
+
+    }
+
+
+    function check_is_last($id=0){
+        $taget = $this->db->where('id',$id)->get('fiscal_year')->row();
+        $this->db->reset();
+
+        $prev = $this->db->where('end <',$taget->end)->get('fiscal_year')->row();
+
+        return ( isset($prev->begin) ) ? false : true;
+    }
+
+    function trans_in_year($id=0){
+        $year = $this->get_fiscalyear($id);
+        $this->db->reset();
+        $count = 0;
+
+        if( empty($year) || !isset($year->begin) ) return $count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('ord_date >='=>$year->begin,'ord_date <='=>$year->end))->get('sales_orders')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('ord_date >='=>$year->begin,'ord_date <='=>$year->end))->get('purch_orders')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('delivery_date >='=>$year->begin,'delivery_date <='=>$year->end))->get('grn_batch')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('tran_date >='=>$year->begin,'tran_date <='=>$year->end))->get('debtor_trans')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('tran_date >='=>$year->begin,'tran_date <='=>$year->end))->get('supp_trans')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('released_date >='=>$year->begin,'released_date <='=>''))->get('workorders')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('tran_date >='=>$year->begin,'tran_date <='=>$year->end))->get('stock_moves')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('tran_date >='=>$year->begin,'tran_date <='=>$year->end))->get('gl_trans')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('trans_date >='=>$year->begin,'trans_date <='=>$year->end))->get('bank_trans')->row();
+        $count += $data->count;
+
+        $this->db->reset();
+        $data = $this->db->select('COUNT(*) AS count')->where(array('gl_date >='=>$year->begin,'gl_date <='=>$year->end))->get('audit_trail')->row();
+        $count += $data->count;
+
+        return $count;
+
+    }
+
+
+    function delete($selected_id) {
+        global $db_connections;
+
+
+//         db_backup( $db_connections[$_SESSION["wa_current_user"]->company], 'Security backup before Fiscal Year Removal');
+
+        begin_transaction();
+        $ref = _("Open Balance");
+//         $myrow = get_fiscalyear($selected_id);
+        $year = $this->get_fiscalyear($id);
+
+        $to = $year->end;
+
+        /*
+         * remove Sale Order
+         */
+        $this->db->select('order_no, trans_type')->where('ord_date <=',$year->end);
+        $this->db->where('type <>',1); // don't take the templates
+        $sale_order = $this->db->get('sales_orders');
+        if( !is_object($sale_order) ){
+            display_error(_("Could not retrieve sales orders") );
+        } else {
+            foreach ($sale_order->result() AS $order){
+                $this->db->select('SUM(qty_sent) AS qty_sent, SUM(quantity) AS quantity',false);
+                $this->db->where(array('order_no' => $order->order_no,'trans_type' => $order->trans_type));
+                $sales_order_details = $this->db->get('sales_order_details');
+                if( !is_object($sales_order_details) ){
+                    display_error(_("Could not retrieve sales order details") );
+                } else {
+                    $sales_order_detail_check = $sales_order_details->row();
+                    if( $sales_order_detail_check->qty_sent == $sales_order_detail_check->quantity){
+                        $this->db->delete('sales_order_details', array('order_no' => $order->order_no, 'trans_type' => $order->trans_type));
+                        $this->db->delete('sales_orders', array('order_no' => $order->order_no, 'trans_type' => $order->trans_type));
+                        delete_attachments_and_comments($order->trans_type, $order->order_no);
+                    }
+                }
+            }
+        }
+
+        /*
+         * remove Purchase Order
+         */
+        $purchase_order = $this->db->select('order_no')->where('ord_date <=',$year->end)->get('purch_orders');
+        if( !is_object($purchase_order) ){
+            display_error(_("Could not retrieve purchase orders") );
+        } else {
+            foreach ($purchase_order->result() AS $order){
+                $this->db->select('SUM(quantity_ordered) AS qty_sent, SUM(quantity_received) AS quantity',false);
+                $purchase_order_details = $this->db->where(array('order_no' => $order->order_no))->get('purch_order_details');
+                if( !is_object($purchase_order_details) ){
+                    display_error(_("Could not retrieve purchase order details") );
+                } else {
+                    $purchase_order_detail_check = $purchase_order_details->row();
+                    if( $purchase_order_detail_check->qty_sent == $purchase_order_detail_check->quantity){
+                        $this->db->delete('purch_order_details', array('order_no' => $order->order_no));
+                        $this->db->delete('purch_orders', array('order_no' => $order->order_no));
+                        delete_attachments_and_comments(ST_PURCHORDER, $order->order_no);
+                    }
+                }
+            }
+        }
+
+
+        /*
+         * remove GL_batch
+         */
+        $grn_batch = $this->db->select('id')->where('delivery_date <=',$year->end)->get('grn_batch');
+        if( !is_object($grn_batch) ){
+            display_error(_("Could not retrieve grn batch") );
+        } else {
+            foreach ($grn_batch->result() AS $item){
+                $this->db->delete('grn_items', array('grn_batch_id' => $item->id));
+                $this->db->delete('grn_batch', array('id' => $item->id));
+                delete_attachments_and_comments(25, $item->id);
+            }
+        }
+
+
+
+        /*
+         * remove customer trans
+         */
+        $this->db->select('trans_no, type')->where('tran_date <=',$year->end);
+        $this->db->where('(ov_amount + ov_gst + ov_freight + ov_freight_tax + ov_discount) = alloc');
+        $debtor_trans = $this->db->get('debtor_trans');
+        if( !is_object($debtor_trans) ){
+            display_error(_("Could not retrieve debtor trans") );
+        } else {
+            foreach ($debtor_trans->result() AS $tran){
+                if( $tran->type== ST_SALESINVOICE ){
+                    $deliveries = get_sales_parent_numbers($row['type'], $row['trans_no']);
+                    foreach ($deliveries as $delivery)
+                    {
+                        $sql = "DELETE FROM ".TB_PREF."debtor_trans_details WHERE debtor_trans_no = $delivery AND debtor_trans_type = ".ST_CUSTDELIVERY;
+                        db_query($sql, "Could not delete debtor trans details");
+                        $sql = "DELETE FROM ".TB_PREF."debtor_trans WHERE trans_no = $delivery AND type = ".ST_CUSTDELIVERY;
+                        db_query($sql, "Could not delete debtor trans");
+                        delete_attachments_and_comments(ST_CUSTDELIVERY, $delivery);
+                    }
+                }
+            }
+        }
+
+
+        while ($row = db_fetch($result))
+            {
+
+
+            $sql = "DELETE FROM ".TB_PREF."cust_allocations WHERE trans_no_from = {$row['trans_no']} AND trans_type_from = {$row['type']}";
+            db_query($sql, "Could not delete cust allocations");
+		$sql = "DELETE FROM ".TB_PREF."debtor_trans_details WHERE debtor_trans_no = {$row['trans_no']} AND debtor_trans_type = {$row['type']}";
+    		db_query($sql, "Could not delete debtor trans details");
+		$sql = "DELETE FROM ".TB_PREF."debtor_trans WHERE trans_no = {$row['trans_no']} AND type = {$row['type']}";
+    		db_query($sql, "Could not delete debtor trans");
+    		delete_attachments_and_comments($row['type'], $row['trans_no']);
+    }
+
+
+
+    $sql = "SELECT trans_no, type FROM ".TB_PREF."supp_trans WHERE tran_date <= '$to' AND
+    ABS(ov_amount + ov_gst + ov_discount) = alloc";
+    $result = db_query($sql, "Could not retrieve supp trans");
+	while ($row = db_fetch($result))
+	{
+    	    $sql = "DELETE FROM ".TB_PREF."supp_allocations WHERE trans_no_from = {$row['trans_no']} AND trans_type_from = {$row['type']}";
+    	    db_query($sql, "Could not delete supp allocations");
+    	    $sql = "DELETE FROM ".TB_PREF."supp_invoice_items WHERE supp_trans_no = {$row['trans_no']} AND supp_trans_type = {$row['type']}";
+    	        db_query($sql, "Could not delete supp invoice items");
+		$sql = "DELETE FROM ".TB_PREF."supp_trans WHERE trans_no = {$row['trans_no']} AND type = {$row['type']}";
+		db_query($sql, "Could not delete supp trans");
+    		    delete_attachments_and_comments($row['type'], $row['trans_no']);
+	}
+	$sql = "SELECT id FROM ".TB_PREF."workorders WHERE released_date <= '$to' AND closed=1";
+    	$result = db_query($sql, "Could not retrieve supp trans");
+    	while ($row = db_fetch($result))
+	{
+    	$sql = "SELECT issue_no FROM ".TB_PREF."wo_issues WHERE workorder_id = {$row['id']}";
+    	    $res = db_query($sql, "Could not retrieve wo issues");
+		while ($row2 = db_fetch_row($res))
+    	{
+    	$sql = "DELETE FROM ".TB_PREF."wo_issue_items WHERE issue_id = {$row2[0]}";
+    	    db_query($sql, "Could not delete wo issue items");
+    	    }
+    	    delete_attachments_and_comments(ST_MANUISSUE, $row['id']);
+    	        $sql = "DELETE FROM ".TB_PREF."wo_issues WHERE workorder_id = {$row['id']}";
+		db_query($sql, "Could not delete wo issues");
+		$sql = "DELETE FROM ".TB_PREF."wo_manufacture WHERE workorder_id = {$row['id']}";
+		db_query($sql, "Could not delete wo manufacture");
+		$sql = "DELETE FROM ".TB_PREF."wo_requirements WHERE workorder_id = {$row['id']}";
+		db_query($sql, "Could not delete wo requirements");
+    		$sql = "DELETE FROM ".TB_PREF."workorders WHERE id = {$row['id']}";
+		db_query($sql, "Could not delete workorders");
+    		    delete_attachments_and_comments(ST_WORKORDER, $row['id']);
+    }
+    $sql = "SELECT loc_code, stock_id, SUM(qty) AS qty, SUM(qty*standard_cost) AS std_cost FROM ".TB_PREF."stock_moves WHERE tran_date <= '$to' GROUP by
+    loc_code, stock_id";
+    $result = db_query($sql, "Could not retrieve supp trans");
+    while ($row = db_fetch($result))
+                    {
+		$sql = "DELETE FROM ".TB_PREF."stock_moves WHERE tran_date <= '$to' AND loc_code = '{$row['loc_code']}' AND stock_id = '{$row['stock_id']}'";
+		db_query($sql, "Could not delete stock moves");
+    		    $qty = $row['qty'];
+    		    $std_cost = ($qty == 0 ? 0 : round2($row['std_cost'] / $qty, user_price_dec()));
+    		    $sql = "INSERT INTO ".TB_PREF."stock_moves (stock_id, loc_code, tran_date, reference, qty, standard_cost) VALUES
+    		    ('{$row['stock_id']}', '{$row['loc_code']}', '$to', '$ref', $qty, $std_cost)";
+		db_query($sql, "Could not insert stock move");
+    }
+    		    $sql = "DELETE FROM ".TB_PREF."voided WHERE date_ <= '$to'";
+    		    db_query($sql, "Could not delete voided items");
+    		    $sql = "DELETE FROM ".TB_PREF."trans_tax_details WHERE tran_date <= '$to'";
+	db_query($sql, "Could not delete trans tax details");
+    		    $sql = "DELETE FROM ".TB_PREF."exchange_rates WHERE date_ <= '$to'";
+	db_query($sql, "Could not delete exchange rates");
+    	$sql = "DELETE FROM ".TB_PREF."budget_trans WHERE tran_date <= '$to'";
+	db_query($sql, "Could not delete exchange rates");
+
+    	$sql = "SELECT account, SUM(amount) AS amount FROM ".TB_PREF."gl_trans WHERE tran_date <= '$to' GROUP by account";
+    	$result = db_query($sql, "Could not retrieve gl trans");
+    	$trans_no = get_next_trans_no(ST_JOURNAL);
+    	$new = false;
+    	while ($row = db_fetch($result)){
+    	$sql = "DELETE FROM ".TB_PREF."gl_trans WHERE tran_date <= '$to' AND account = '{$row['account']}'";
+		db_query($sql, "Could not delete gl trans");
+    		if (is_account_balancesheet($row['account']))
+    	{
+    	$sql = "INSERT INTO ".TB_PREF."gl_trans (type, type_no, tran_date, account, memo_, amount) VALUES
+    	(".ST_JOURNAL.", $trans_no, '$to', '{$row['account']}', '$ref', {$row['amount']})";
+    	db_query($sql, "Could not insert gl trans");
+    	$new = true;
+    	}
+    	}
+    	if ($new)
+    	{
+    	global $Refs;
+    	$trans_type = ST_JOURNAL;
+    	$reference = $Refs->get_next($trans_type);
+		$Refs->save($trans_type, $trans_no, $reference);
+    		$date_ = sql2date($to);
+
+    		add_audit_trail($trans_type, $trans_no, $date_);
+    }
+    $sql = "SELECT bank_act, SUM(amount) AS amount FROM ".TB_PREF."bank_trans WHERE trans_date <= '$to' GROUP BY bank_act";
+    $result = db_query($sql, "Could not retrieve bank trans");
+	while ($row = db_fetch($result))
+	{
+    	    $sql = "DELETE FROM ".TB_PREF."bank_trans WHERE trans_date <= '$to' AND bank_act = '{$row['bank_act']}'";
+		db_query($sql, "Could not delete bank trans");
+    		$sql = "INSERT INTO ".TB_PREF."bank_trans (type, trans_no, trans_date, bank_act, ref, amount) VALUES
+    		(0, 0, '$to', '{$row['bank_act']}', '$ref', {$row['amount']})";
+    		db_query($sql, "Could not insert bank trans");
+	}
+
+	$sql = "DELETE FROM ".TB_PREF."audit_trail WHERE gl_date <= '$to'";
+    	db_query($sql, "Could not delete audit trail");
+
+	$sql = "SELECT type, id FROM ".TB_PREF."comments WHERE type != ".ST_SALESQUOTE." AND type != ".ST_SALESORDER." AND type != ".ST_PURCHORDER;
+    	$result = db_query($sql, "Could not retrieve comments");
+	while ($row = db_fetch($result)){
+    	$sql = "SELECT count(*) FROM ".TB_PREF."gl_trans WHERE type = {$row['type']} AND type_no = {$row['id']}";
+    	$res = db_query($sql, "Could not retrieve gl_trans");
+    	$row2 = db_fetch_row($res);
+		if ($row2[0] == 0) // if no link, then delete comments
+		{
+			$sql = "DELETE FROM ".TB_PREF."comments WHERE type = {$row['type']} AND id = {$row['id']}";
+    			db_query($sql, "Could not delete comments");
+		}
+	}
+	$sql = "SELECT type, id FROM ".TB_PREF."refs WHERE type != ".ST_SALESQUOTE." AND type != ".ST_SALESORDER." AND type != ".ST_PURCHORDER;
+    	$result = db_query($sql, "Could not retrieve refs");
+	while ($row = db_fetch($result)){
+    	$sql = "SELECT count(*) FROM ".TB_PREF."gl_trans WHERE type = {$row['type']} AND type_no = {$row['id']}";
+    	$res = db_query($sql, "Could not retrieve gl_trans");
+    	$row2 = db_fetch_row($res);
+		if ($row2[0] == 0) { // if no link, then delete refs
+
+    			$sql = "DELETE FROM ".TB_PREF."refs WHERE type = {$row['type']} AND id = {$row['id']}";
+    			db_query($sql, "Could not delete refs");
+    		}
+    	}
+
+    	delete_fiscalyear($selected_id);
+    	commit_transaction();
+    }
+}

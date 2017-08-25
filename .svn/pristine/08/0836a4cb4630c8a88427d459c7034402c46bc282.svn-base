@@ -1,0 +1,73 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class BankReportStatement  {
+    function __construct() {
+        $ci = get_instance();
+        $this->ci = $ci;
+        $this->input = $ci->input;
+
+
+        $this->bank_transaction_model = $ci->model('bank_transaction',true);
+        $this->gl_trans_model = $ci->model('gl_trans',true);
+        $this->bank_trans_model = $ci->model('bank_trans',true);
+        $this->customer_model = $ci->model('cutomer',true);
+
+    }
+
+    function statement_print($pdf){
+        $acc = $pdf->inputVal('PARAM_0');
+        $from = $pdf->inputVal('PARAM_1');
+        $to = $pdf->inputVal('PARAM_2');
+        $zero = $pdf->inputVal('PARAM_3');
+        $comments = $pdf->inputVal('PARAM_4');
+        $orientation = $pdf->inputVal('PARAM_5')? 'L' : 'P';
+        $destination = $pdf->inputVal('PARAM_6');
+
+        $account = get_bank_account($acc);
+        $act = $account['bank_account_name']." - ".$account['bank_curr_code']." - ".$account['bank_account_number'];
+
+        $prev_balance = $this->bank_transaction_model->get_bank_balance_to($from, $account["id"]);
+        $trans = $this->bank_transaction_model->get_bank_transactions($from, $to, $account['id']);
+bug($trans);die;
+        $data['title'] = 'Bank Statement';
+        $data['company'] = $pdf->company;
+        $data['bank_account'] = $account['bank_account_name'];
+        if( array_key_exists('bank_curr_code', $account) ){
+            $data['bank_account'].='-'.$account['bank_curr_code'];
+        }
+        if( array_key_exists('bank_account_number', $account) && $account['bank_account_number'] ){
+            $data['bank_account'].='-'.$account['bank_account_number'];
+        }
+        $data['opening'] = $prev_balance;
+        //     	bug($prev_balance);die;
+        $data['period'] = $from.'-'.$to;
+        $data['fiscal_year'] = $pdf->fiscal_year;
+        $data['print_time'] = $pdf->print_time;
+        $data['host'] = $_SERVER['SERVER_NAME'];
+        $data['user'] = $_SESSION["wa_current_user"]->name;
+        $data['width'] = 160;
+
+        $data['tables'] = array(
+            'type'=>array('title'=>'Type','w'=>15),
+            'trans_no'=>array('title'=>'#' ,'w'=>10),
+            'ref'=>array('title'=>'Reference' ,'w'=>15),
+            'trans_date'=>array('title'=>'Date' ,'w'=>10),
+            'person'=>array('title'=>'Person/Item','w'=>20),
+            //     	    'debit'=>array('title'=>'Debit','w'=>13,'class'=>'textright'),
+        //     	    'credit'=>array('title'=>'Credit','w'=>13,'class'=>'textright'),
+        //     	    'balance'=>array('title'=>'Balance','w'=>13,'class'=>'textright'),
+        );
+        $data['trans'] = $trans;
+
+        $html = $this->ci->view('reporting/bank/transactions',$data,true);
+
+        $pdf->tcpdf->AddPage();
+        $pdf->tcpdf->SetFont('helvetica', '', 9);
+        //     	$pdf->tcpdf->SetMargins(12, 12, 12, true);
+        $pdf->tcpdf->SetAutoPageBreak(TRUE,12);
+
+
+        $pdf->tcpdf->writeHTML($pdf->css.$html);
+
+    }
+}

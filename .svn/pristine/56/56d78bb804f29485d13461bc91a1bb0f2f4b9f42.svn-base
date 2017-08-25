@@ -1,0 +1,88 @@
+/**
+ * QuanNH 2016-02-26
+ * build function call document ready , after ajax call
+ */
+var ajax_fun = {
+	int:function(){
+		$('button[name=page_reload]').click(function(){
+			form = $('#_page_body form');
+			form.append('<input name="page_reload" value="" type="hidden" />');
+			form.submit();
+		});
+
+		jQuery('.modal-dialog button.close, button[data-dismiss=modal]').click(function(){
+			$(this).parents('.modal.fade').hide();
+		});
+
+		jQuery('.qdate').qdate();
+		$('span.inputdate .icon').click(function() {
+			$( ".qdate" ).qdate("hide");
+			$(this).prev('input.qdate').qdate('show');
+		});
+
+		item_listview.actions();
+
+		loading_bootstrap.remove();
+		//self_bill.supplier_inc();
+
+		if ( typeof imported_good != "undefined" && typeof imported_good.ini == "function") {
+			imported_good.ini();
+		}
+
+		jQuery('.modal-dialog button.close, button[data-dismiss=modal]').click(function(){
+			$(this).parents('.modal.fade').hide();
+		});
+
+		jQuery('select.autosubmit').change(function(){
+			JsHttpRequest.request(this);
+		});
+
+		if ( typeof openning != "undefined" && typeof openning.ini == "function") {
+			openning.ini();
+		}
+
+		jQuery('button.remove').click(function(){
+			var form = $(this).parents('form');
+			form.append('<input type="hidden" value="'+$(this).val()+'" name="_remove">');
+			JsHttpRequest.request( this );
+		});
+
+		jQuery('#delete-fiscalyear-confim').modal('show');
+		jQuery('#delete-fiscalyear-confim .btn-submit').click(function(){
+			loading_bootstrap.open();
+			jQuery('#delete-fiscalyear-confim').modal('hide');
+		});
+
+
+
+	},
+
+};
+
+ajax_fun.supplier = function(){
+
+	var gst_by = $("input[name=gst_by]:checked");
+	var supplier_tax = $("select[name=supplier_tax_id]");
+	if( gst_by.val()==0 ){
+		supplier_tax.prop('disabled', true);
+	} else {
+		supplier_tax.prop('disabled', false);
+	}
+	supplier_tax.change(function(){
+		$('input[name=_supplier_tax_id_sel]').val($(this).val());
+	});
+};
+
+ajax_fun.multicheckbox = function(){
+	inputarea = jQuery('.multicheckbox');
+
+	inputarea.parents('.form-group').find('button.checkall').click(function(){
+		jQuery('input[type=checkbox]',inputarea).prop( "checked", true );
+		return false;
+	});
+	inputarea.parents('.form-group').find('button.uncheckall').click(function(){
+		jQuery('input[type=checkbox]',inputarea).prop( "checked", false );
+		return false;
+	});
+};
+

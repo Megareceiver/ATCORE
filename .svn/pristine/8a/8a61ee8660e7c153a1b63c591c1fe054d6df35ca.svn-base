@@ -1,0 +1,27 @@
+<?php
+class BankInquiryStatement  {
+    function __construct() {
+
+    }
+
+    function index(){
+        $this->statement();
+    }
+
+    private function statement(){
+        $data = array(
+            'bank_account' => array('type'=>'BANK_ACCOUNTS','title'=>_('Account'),'value'=>null ),
+            'date_from' => array('type'=>'date','title'=>_('From'),'value'=>begin_month() ),
+            'date_to' => array('type'=>'date','title'=>_('To'),'value'=>begin_month() ),
+        );
+
+        page("Bank Statement");
+
+        start_form($multi=false, $dummy=false, $action=get_instance()->uri->uri_string());
+        module_view('inquiry/statement-control',$data);
+        end_form();
+
+
+        end_page();
+    }
+}

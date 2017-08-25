@@ -1,0 +1,22 @@
+<?php
+class Sales_Customer_Model extends CI_Model {
+    function __construct(){
+        parent::__construct();
+    }
+
+//     function item_options(){
+//         $options = array();
+//         $data = $this->db->select('debtor_no AS id,name,curr_code')->order_by('name', 'ASC')->get('debtors_master')->result();
+//         if( $data ){
+//             foreach ($data AS $row){
+//                 $options[$row->id] = $row->name.' - '.$row->curr_code;
+//             }
+//         }
+//         return $options;
+//     }
+
+    function debtor_id_first(){
+        $debtor = $this->db->select('debtor_no')->order_by('name', 'ASC')->get('debtors_master')->row();
+        return is_object($debtor) ? $debtor->debtor_no : 0;
+    }
+}

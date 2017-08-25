@@ -1,0 +1,37 @@
+<div id="atmodal" class="modal fade">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h2 class="modal-title">{$title}</h2>
+            </div>
+            <div class="modal-body">
+
+					{if isset($fields)}{foreach $fields AS $name=>$field}
+
+						{if $field.type !='HIDDEN' }
+
+							{formInputGroup field=$field name=$name}
+						{else}
+						{formInput type=$field.type name=$name field=$field}
+						{/if}
+						{/foreach}
+					{/if}
+
+	            <div class="modal-footer">
+	            	{if isset($buttons)}{foreach $buttons AS $name=>$button}
+	            		<button type="button" name={$name}" {$button.attributes}>
+
+	            			{if isset($button.icon)}
+	            			<span class="glyphicon glyphicon-{$button.icon}" aria-hidden="true"></span>
+	            			{/if}
+	            			{$button.title}
+            			</button>
+	            	{/foreach}{/if}
+	                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+
+	            </div>
+        	</div>
+    	</div>
+	</div>
+</div>
